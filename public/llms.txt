@@ -1,0 +1,19 @@
+# looot-reveal
+
+Open-source website visitor to company lookup. Input: an access log, a CSV of IPs, or a tracking snippet. Output: the companies that visited, the pages they viewed and an ICP flag with the signals behind it. Company-level only, never person-level.
+
+## Run it
+- Dry run, no token, no call: npm run reveal -- --input examples/access.log --dry-run
+- Real run: LOOOT_TOKEN=... npm run reveal -- --input access.log --cap 0.50
+- Demo UI with sample data: npm run demo (http://localhost:3520)
+
+## Outputs
+reveal-out/visitors.json, visitors.csv, visitors.md. Answers are cached in state/reveal.json, so a repeat IP costs nothing.
+
+## Money rules
+Quote is printed before any call. --cap stops the run before a call that would pass it. Idempotency key per (input, job). A run still in progress is stored as pending and collected on the next run.
+
+## looot jobs
+ip.lookup (ipinfo--2, $0.0005; ipinfo-lite, free), company.enrich (job with fallback, from $0.0019).
+
+Docs: https://docs.looot.ai  Skill file: https://looot.ai/skill.md

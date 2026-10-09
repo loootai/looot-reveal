@@ -1,0 +1,18 @@
+{
+  "lookup": "ipinfo",
+  "enrich": true,
+  "spendCapUsd": 1,
+  "retentionDays": 30,
+  "storeRawIp": false,
+  "ignorePaths": ["/api", "/_next", "/favicon.ico", "/robots.txt", "/sitemap.xml"],
+  "networkNameHints": ["comcast", "verizon", "at&t", "spectrum", "charter", "vodafone", "orange", "telefonica", "deutsche telekom", "bt group", "virgin media", "t-mobile", "bouygues", "amazon", "google llc", "microsoft", "digitalocean", "ovh", "hetzner", "cloudflare", "akamai", "linode", "vultr"],
+  "icp": {
+    "threshold": 4,
+    "signals": [
+      { "id": "industry", "label": "Industry is software or services", "kind": "text", "field": "industry", "anyOf": ["software", "saas", "information technology", "internet", "marketing", "consulting"], "weight": 2 },
+      { "id": "size", "label": "20 to 2,000 employees", "kind": "employees", "min": 20, "max": 2000, "weight": 2 },
+      { "id": "country", "label": "Based in a target country", "kind": "text", "field": "country", "anyOf": ["US", "GB", "DE", "FR", "NL", "CA"], "weight": 1 },
+      { "id": "pricing", "label": "Viewed the pricing page", "kind": "pages", "paths": ["/pricing", "/plans"], "weight": 3 }
+    ]
+  }
+}
