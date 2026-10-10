@@ -1,6 +1,10 @@
+<p align="center"><img src="assets/hero.png" alt="looot-reveal" width="100%"></p>
+
 # looot-reveal
 
-An open-source alternative to [RB2B](https://www.rb2b.com/pricing) and Clearbit Reveal: see which companies visit your website. RB2B starts at $0 for 150 identifications a month and $79 a month for 300 (public pricing page, read 2026-10-10). Clearbit Reveal now sells inside HubSpot Breeze Intelligence on a credit plan, with reported entry prices around $45 a month on top of a HubSpot seat (third-party reviews, read 2026-10-10). This repo runs on one looot key and you pay list price per lookup, about $0.0005 to find the company behind an IP.
+[![License](https://img.shields.io/github/license/loootai/looot-reveal)](LICENSE) [![Release](https://img.shields.io/github/v/release/loootai/looot-reveal)](https://github.com/loootai/looot-reveal/releases) [![Docs](https://img.shields.io/badge/docs-docs.looot.ai-12A06A)](https://docs.looot.ai)
+
+An open-source alternative to [RB2B](https://www.rb2b.com/pricing) and Clearbit Reveal: see which companies visit your website. RB2B starts at $0 for 150 identifications a month and $79 a month for 300 (public pricing page, read 2026-10-10). Clearbit Reveal now sells inside HubSpot Breeze Intelligence on a credit plan, with a third-party estimate of about $45 a month on top of a HubSpot seat (not a vendor figure, read 2026-10-10). This repo runs on one looot key and you pay list price per lookup, about $0.0005 to find the company behind an IP.
 
 It reads an access log, a CSV of IPs, or visits from a small tracking snippet. It looks each IP up through looot's IP intelligence provider, drops ISPs, hosting and VPNs, enriches the company that is left, and shows a feed of visiting companies with the pages they viewed and an ICP match flag.
 
@@ -117,3 +121,20 @@ Stack: TypeScript, Next.js App Router, Tailwind. Built on [looot](https://looot.
 ## Licence
 
 MIT, copyright looot.
+
+## Related
+
+Other open-source projects built on [looot](https://looot.ai):
+
+- [looot-intent](https://github.com/loootai/looot-intent): account intent and buying-stage scoring (6sense)
+- [looot-score](https://github.com/loootai/looot-score): lead and ICP fit scoring (MadKudu)
+- [looot-techstack](https://github.com/loootai/looot-techstack): website technologies from several providers (BuiltWith, Wappalyzer)
+- [looot-signals](https://github.com/loootai/looot-signals): hiring, funding and news triggers (TheirStack, Harmonic)
+- [looot-lookalike](https://github.com/loootai/looot-lookalike): lookalike company search (Ocean.io)
+- [looot-ads](https://github.com/loootai/looot-ads): competitor ad board (Foreplay)
+- [looot-reviews](https://github.com/loootai/looot-reviews): review themes and weak spots (ReviewTrackers)
+- [looot-battlecards](https://github.com/loootai/looot-battlecards): competitor battlecards (Klue, Crayon)
+- [looot-mentions](https://github.com/loootai/looot-mentions): brand and keyword listening (Brand24)
+- [looot-crm](https://github.com/loootai/looot-crm): a small CRM with buying signals built in
+- [looot-seo](https://github.com/loootai/looot-seo): self-hosted SEO workspace
+- [looot-monitor](https://github.com/loootai/looot-monitor): brand and competitor monitoring with alerts
