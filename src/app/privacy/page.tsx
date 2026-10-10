@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
+import { RetentionClient } from "@/components/RetentionClient";
+import { getView } from "@/lib/app";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = { title: "Privacy" };
 
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
+  const v = await getView();
   return (
+    <div className="flex flex-col gap-6">
+    <RetentionClient config={v.config} demo={v.demo} />
     <article className="max-w-2xl space-y-4 [&_h2]:mt-6 [&_h2]:text-16 [&_h2]:font-semibold [&_li]:ml-4 [&_li]:list-disc">
       <h1 className="text-20 font-semibold">Privacy and consent</h1>
       <p>looot-reveal turns an IP address into a company. It does not turn anything into a person. That is a design limit, not a missing feature.</p>
@@ -12,8 +19,8 @@ export default function PrivacyPage() {
       <h2>What you must do</h2>
       <ul>
         <li>In the EU, the UK and any place that requires it, show a consent banner before the snippet sends anything. The snippet waits for window.revealGrant().</li>
-        <li>Describe the processing in your privacy policy, and name looot and IPinfo as processors for the IP lookup.</li>
-        <li>Set a retention window you can defend. The default is 30 days.</li>
+        <li>Describe the processing in your privacy policy, and name looot and each IP lookup provider you turn on (IPinfo by default, People Data Labs if enabled) as processors.</li>
+        <li>Set a retention window you can defend. The default is 30 days. Stored answers per IP follow a separate cache window on the Provider waterfall page.</li>
         <li>If you import server logs instead of using the snippet, your lawful basis for keeping those logs still applies.</li>
       </ul>
       <h2>What the app does for you</h2>
@@ -26,5 +33,6 @@ export default function PrivacyPage() {
       </ul>
       <p className="text-mute">This page is not legal advice. Ask your counsel before you use the data for outreach.</p>
     </article>
+    </div>
   );
 }

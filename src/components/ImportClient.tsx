@@ -78,9 +78,11 @@ export function ImportClient({ quote, pending, demo, hasToken, capUsd }: { quote
           <p className="text-mute">Nothing is waiting. Add visits first, or all IPs already have an answer.</p>
         ) : (
           <>
+            <p className="text-12 text-mute">Waterfall order: {quote.order.map((p, i) => `${i + 1}. ${p.id}`).join(", ") || "no provider is on"}. Change it on the Provider waterfall page.</p>
+            <p className="text-12 font-medium">Worst case, every provider called for every new IP</p>
             <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1">
               {quote.lines.map((l) => (
-                <React.Fragment key={l.jobId}>
+                <React.Fragment key={l.providerId ?? l.jobId}>
                   <dt>
                     {l.label}
                     <span className="num block text-12 text-mute">
@@ -96,7 +98,7 @@ export function ImportClient({ quote, pending, demo, hasToken, capUsd }: { quote
               <dd className="num text-right text-mute">{usd(quote.capMicros)}</dd>
             </dl>
             <p className="text-12 text-mute">
-              The company call only runs for networks that are not consumer ISPs, hosting or VPNs, so the real cost is usually lower. {quote.privateIps} private addresses and {quote.cachedIps} answered ones are free. The run stops before any call that would pass the cap.{quote.capBinds ? " The cap is below the worst case, so the run may stop early." : ""}
+              Each address stops at the first confident match, and at the first ISP, mobile, hosting or VPN verdict, so the real cost is usually lower. {quote.privateIps} private addresses, {quote.skippedIps} in skipped ranges and {quote.cachedIps} answered ones are free. The run stops before any call that would pass the cap.{quote.capBinds ? " The cap is below the worst case, so the run may stop early." : ""}
             </p>
             {!canRun && <p className="text-12 text-high">LOOOT_TOKEN is not set on the server, so the run is disabled. Use the CLI with --dry-run to see the cost.</p>}
             <Button variant="primary" disabled={busy || !canRun} onClick={() => act(async () => {

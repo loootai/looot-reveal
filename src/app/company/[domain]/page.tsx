@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Check, X } from "lucide-react";
+import { ArrowLeft, Check, TriangleAlert, X } from "lucide-react";
 import { Badge, Table, Td, Th } from "@/components/ui/misc";
 import { getView } from "@/lib/app";
-import { ago } from "@/lib/format";
+import { ago, reasonLabel } from "@/lib/format";
 import { usd, usdPrecise } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ domain
   return (
     <div className="flex flex-col gap-4">
       <Link href="/" className="flex w-fit items-center gap-1 text-link hover:underline">
-        <ArrowLeft className="size-4" /> Visitors
+        <ArrowLeft className="size-4" /> Feed
       </Link>
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-20 font-semibold">{c.name}</h1>
@@ -28,6 +28,15 @@ export default async function CompanyPage({ params }: { params: Promise<{ domain
         {c.country ? ` · ${c.country}` : ""}
       </p>
       {p?.description && <p className="max-w-2xl">{p.description}</p>}
+      {c.confidence === "low" && (
+        <div role="note" className="flex max-w-2xl items-start gap-2 rounded-panel border border-line bg-amber-soft p-3 text-amber">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+          <span>
+            Low confidence. The providers named different companies for this network. Used: {c.name} ({c.domain}). Also named:{" "}
+            {c.alternatives.map((a) => `${a.name ?? a.domain} (${a.domain}) by ${a.provider}`).join("; ")}.
+          </span>
+        </div>
+      )}
 
       <section className="rounded-panel border border-line bg-panel" aria-labelledby="why">
         <div className="border-b border-line p-3">
@@ -65,6 +74,34 @@ export default async function CompanyPage({ params }: { params: Promise<{ domain
           </Table>
         </div>
         <p className="border-t border-line px-3 py-2 text-12 text-mute">A call that fed several signals shows its full cost on each row. Total spent on this company: {usd(c.costMicros)}.</p>
+      </section>
+
+      <section className="rounded-panel border border-line bg-panel" aria-labelledby="how">
+        <div className="border-b border-line p-3">
+          <h2 id="how" className="font-semibold">How each address was resolved</h2>
+          <p className="text-12 text-mute">Providers are asked in waterfall order. The address itself is not shown.</p>
+        </div>
+        <ul className="divide-y divide-line">
+          {c.lookups.map((l, n) => (
+            <li key={n} className="p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium">Address {n + 1}</span>
+                <Badge tone={l.confidence === "high" ? "brand" : "amber"}>{l.confidence} confidence</Badge>
+                <span className="num text-12 text-mute">answered by {l.provider}, {usdPrecise(l.costMicros)}</span>
+              </div>
+              <ol className="mt-1 text-12 text-mute">
+                {l.answers.map((a) => (
+                  <li key={a.provider} className="num">
+                    {a.provider}: {a.outcome}
+                    {a.reason ? ` (${reasonLabel(a.reason)})` : ""}
+                    {a.name ? `, ${a.name}` : ""}
+                    {a.domain ? ` (${a.domain})` : ""} · {usdPrecise(a.costMicros)}
+                  </li>
+                ))}
+              </ol>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="rounded-panel border border-line bg-panel" aria-labelledby="pages">

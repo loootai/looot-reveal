@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Check, Search } from "lucide-react";
+import { Check, Search, TriangleAlert } from "lucide-react";
 import { Badge, Segmented, Table, Td, Th } from "@/components/ui/misc";
 import { Input } from "@/components/ui/input";
 import { ago } from "@/lib/format";
@@ -33,6 +33,7 @@ export function VisitorsClient({ companies, now }: { companies: CompanyVisit[]; 
               <tr>
                 <Th>Company</Th>
                 <Th>ICP</Th>
+                <Th>Answered by</Th>
                 <Th>Pages viewed</Th>
                 <Th className="text-right">Visits</Th>
                 <Th>Country</Th>
@@ -47,6 +48,13 @@ export function VisitorsClient({ companies, now }: { companies: CompanyVisit[]; 
                       {c.name}
                     </Link>
                     <span className="num text-12 text-mute">{c.domain}</span>
+                    {c.confidence === "low" && (
+                      <span className="mt-0.5 flex flex-wrap items-center gap-1 text-12 text-amber">
+                        <Badge tone="amber"><TriangleAlert className="size-3" /> Low confidence</Badge>
+                        also named: {c.alternatives.map((a) => a.name ?? a.domain).join(", ")}
+                      </span>
+                    )}
+                    {c.confidence === "medium" && <span className="block text-12 text-mute">Network owner only</span>}
                   </Td>
                   <Td>
                     {c.icp.matched ? (
@@ -58,6 +66,13 @@ export function VisitorsClient({ companies, now }: { companies: CompanyVisit[]; 
                         {c.icp.score}/{c.icp.maxScore}
                       </Badge>
                     )}
+                  </Td>
+                  <Td className="num whitespace-nowrap text-12">
+                    {c.answeredBy.map((a) => (
+                      <div key={a.provider}>
+                        {a.provider} <span className="text-mute">{usd(a.costMicros)}</span>
+                      </div>
+                    ))}
                   </Td>
                   <Td className="max-w-72">
                     <div className="flex flex-wrap gap-1">
