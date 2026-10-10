@@ -49,7 +49,7 @@ cp .env.example .env.local     # web UI only
 | --- | --- | --- | --- |
 | `LOOOT_TOKEN` | Required for real lookups | Your looot key. Not needed for the demo or `--dry-run`. | looot Settings > Agent tokens, or `looot login` |
 | `LOOOT_API_URL` | Optional | Overrides the API base. Default `https://api.looot.ai`. | Leave unset |
-| `REVEAL_DATA` | Optional | Web UI state file. Default `data/reveal.json`. | Any writable path |
+| `REVEAL_DATA` | Optional | State file shared by the web UI and the CLI. Default `data/reveal.json`. | Any writable path |
 | `REVEAL_CONFIG` | Optional | Web UI config file. Default `reveal.config.json`. | Copy `reveal.config.json` |
 | `NEXT_PUBLIC_DEMO` | Optional | `1` runs the web UI on sample data. `npm run demo` sets it. | Leave unset for real data |
 
@@ -61,8 +61,11 @@ npm run reveal -- --input examples/access.log --dry-run
 
 ```text
 Read 5 page views (combined). Skipped: 1 assets, 1 bots, 0 error responses, 0 unreadable rows.
-4 unique IPs: 1 private (skipped, free), 0 already answered (free), 3 to look up.
-  IP lookup, one per new IP: 3 x $0.0005 = $0.0015  [ip.lookup, ipinfo--2]
+4 unique IPs: 1 private and 0 in skipped ranges (free), 0 already answered (free), 3 to look up.
+Waterfall order: 1. ipinfo-lite ($0.0000)  2. ipinfo ($0.0005). It stops at the first confident company match or the first ISP, mobile, hosting or VPN verdict.
+Worst case, every provider called for every new IP:
+  IPinfo Lite (ASN owner): 3 x $0.0000 = $0.00  [ip.lookup, ipinfo-lite]
+  IPinfo (full lookup): 3 x $0.0005 = $0.0015  [ip.lookup, ipinfo--2]
   Company enrichment, at most one per new IP: 3 x $0.0019 = $0.0057  [company.enrich, job:company.enrich]
 Most this run can cost: $0.0072. Spend cap: $1.00.
 List prices dated 2026-10-10. The real charge is read from each run.
@@ -76,27 +79,40 @@ export LOOOT_TOKEN=...
 npm run reveal -- --input access.log --cap 0.50
 ```
 
-Results go to `reveal-out/visitors.json`, `visitors.csv` and `visitors.md` (change the folder with `--out`). Answers already bought are cached in `state/reveal.json` (change it with `--state`), so an IP seen again costs nothing. Run `npm run reveal -- --help` for all flags. Exit codes are 0 done, 1 run failed, 2 usage error or no token.
+Results go to `reveal-out/visitors.json`, `visitors.csv` and `visitors.md` (change the folder with `--out`). Answers already bought are cached in `data/reveal.json`, the same file the web UI reads (change it with `REVEAL_DATA` or `--state`; an old `state/reveal.json` is moved there on first run), so an IP seen again costs nothing. Run `npm run reveal -- --help` for all flags. Exit codes are 0 done, 1 run failed, 2 usage error or no token.
 
-The web UI on a live key keeps its own state in `data/reveal.json` (`REVEAL_DATA`), not in the CLI's `state/reveal.json`. To see CLI results in the UI, set `REVEAL_DATA=state/reveal.json` or pass `--state data/reveal.json` to the CLI. Run it with `npm run build && npm start` (http://localhost:3000). Pages are Visitors (the feed), a company page with the signals behind its ICP flag, Import (paste or upload, see the quote, run), Settings (edit the config, delete data past retention, snippet) and Privacy. There is no sign-in and no Supabase, so run it behind your own access control.
+Run it with `npm run build && npm start` (http://localhost:3000). A sidebar lists the pages: Feed (and a company page with the signals behind its ICP flag and how each address was resolved), Sources and snippet, Import and run (paste or upload, see the quote, run), Provider waterfall, ICP, Privacy and retention, Costs and Config file (the raw JSON). There is no sign-in and no Supabase, so run it behind your own access control.
+
+## How the lookup works
+
+Each new IP goes down an ordered list of providers set in `reveal.config.json` under `waterfall.providers`. You can reorder them, turn them off, or change a price on the Provider waterfall page.
+
+1. Private addresses and your own `waterfall.skipCidrs` ranges are dropped with no call.
+2. Providers are called in order. The walk stops at the first ISP, mobile, hosting or VPN verdict, so nothing more is spent on that address, and at the first confident company match.
+3. A match is confident when the provider says the network is a business, school or government body (IPinfo) or resolves the IP to a company itself (People Data Labs). An ASN owner from IPinfo Lite alone is a weak match and the walk goes on.
+4. If two providers name different companies, the feed shows both and marks the row low confidence. `waterfall.crossCheck` asks a second company-level provider after every confident match so mismatches show up.
+5. Each answer is cached per IP for `waterfall.cacheDays` days (30 by default). The feed and the company page show which provider answered each address and what it cost.
+
+Before a run the quote prices the worst case for the whole waterfall: every enabled provider called for every new IP, plus enrichment. The spend cap is checked before every call, including calls running in parallel.
 
 ## Spending
 
-The quote prints before any call. The lookup count is exact. The enrichment count is a ceiling, because most addresses belong to consumer ISPs and are dropped before any company call.
+The quote prints before any call. The lookup count is exact. The cost is a ceiling, because most addresses belong to consumer ISPs and stop at the first provider.
 
-| Step | looot job | Endpoint | List price |
-|---|---|---|---|
-| IP to owner, location, network type, VPN flags | `ip.lookup` | `ipinfo--2` | $0.0005 per new IP |
-| Free variant, owner name and domain only | `ip.lookup` | `ipinfo-lite` | $0 |
-| Company profile from the domain | `company.enrich` | job with provider fallback | from $0.0019 per new company |
+| Step | looot job | Endpoint | List price | Default |
+|---|---|---|---|---|
+| Owner name, domain and ASN | `ip.lookup` | `ipinfo-lite` | $0 | on |
+| Owner, location, network type, VPN flags | `ip.lookup` | `ipinfo--2` | $0.0005 per new IP | on |
+| Company behind the IP, charged on a match | `ip.enrich` | `people-data-labs-ip-enrich` | $0.28 per match | off |
+| Company profile from the domain | `company.enrich` | job with provider fallback | from $0.0019 per new company | on |
 
-Prices read from the public catalog on 2026-10-10. Example at list price: 100 new IPs cost $0.05 to look up. If 15 of them are business networks, enrichment adds at most $0.0285, so about $0.08 in total. The worst case, every IP enriched, is $0.24. Repeat IPs and repeat companies are free.
+Prices read from the public catalog on 2026-10-10. Example at list price with the defaults: 100 new IPs cost at most $0.05 to look up. If 15 of them are business networks, enrichment adds at most $0.0285, so about $0.08 in total. The worst case, every IP enriched, is $0.24. Turning People Data Labs on adds up to $0.28 per address that reaches it, which is why it is off. Repeat IPs and repeat companies are free.
 
 Money rules
 
 - The quote shows before any paid action, and the UI button shows the amount it will spend.
-- `--cap` (or `spendCapUsd` in the config) stops the run before a call that would pass it.
-- Each call sends a stable idempotency key per input and job (`reveal:ip.lookup:<ip>`), so a retry never pays twice.
+- `--cap` (or `spendCapUsd` in the config) stops the run before a call that would pass it. A provider that would pass the cap is never started; free ones still run.
+- Each call sends a stable idempotency key per input and job (`reveal:ip.lookup:<provider>:<ip>`), so a retry never pays twice.
 - A run still in progress when waiting stops is stored as pending. The next run collects it with the same key. It is never treated as failed at $0.
 - The default cap is `spendCapUsd` in `reveal.config.json`, 1 dollar. `--cap` overrides it for one CLI run.
 - A failed call is not charged.
@@ -139,6 +155,12 @@ Every flag lists its signals. Weights and the threshold live in `reveal.config.j
 | Viewed a page (for example `/pricing`) | your own visit data | not a looot call, $0 | 3 |
 
 A company matches when matched weights reach the threshold (default 4 of 8). The company page shows each signal, whether it matched, the value seen, its weight, the provider that supplied it and the cost of that call. A call that fed several signals shows its full cost on each row. There is no hidden score.
+
+## Suppliers
+
+Used now, through looot: IPinfo (`ipinfo-lite`, `ipinfo--2`) and People Data Labs (`people-data-labs-ip-enrich`, off by default). These are the only two suppliers in the looot catalog that take an IP, as read on 2026-10-10. Company enrichment from a domain uses whichever provider looot picks for `company.enrich`.
+
+To add a provider, ask looot for it: use the MCP tool `capability_request`, `POST /v1/capability-requests`, or [looot.ai/contact](https://looot.ai/contact) ([how, in the docs](https://docs.looot.ai/support)). Once looot lists an IP endpoint you can add it to `waterfall.providers`. The response parser is chosen by `adapter` (`ipinfo` or `pdl`), so a provider with a different response shape also needs a small parser in `src/lib/parse.ts`, and PRs for that are welcome. Suppliers with a public self-serve IP API that looot does not have yet, and that look worth asking for: ipgeolocation.io, Ipregistry, ipapi.is, MaxMind GeoIP2, ipdata and Abstract API. KickFire and Snitcher return real company profiles but their API access and prices are not public. Nearly all of these return the registered owner of the network, not a resolved visitor, and most bar resale in their standard terms.
 
 ## Privacy and consent
 

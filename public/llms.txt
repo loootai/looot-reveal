@@ -11,12 +11,12 @@ Node 20.9+ (tests 22.12+), `npm ci`. Real lookups need LOOOT_TOKEN (`looot login
 - Demo UI with sample data: npm run demo (http://localhost:3520)
 
 ## Outputs
-reveal-out/visitors.json, visitors.csv, visitors.md. Answers are cached in state/reveal.json, so a repeat IP costs nothing.
+reveal-out/visitors.json, visitors.csv, visitors.md. Answers are cached in data/reveal.json, so a repeat IP costs nothing.
 
 ## Money rules
 Quote is printed before any call. --cap stops the run before a call that would pass it. Idempotency key per (input, job). A run still in progress is stored as pending and collected on the next run.
 
 ## looot jobs
-ip.lookup (ipinfo--2, $0.0005; ipinfo-lite, free), company.enrich (job with fallback, from $0.0019).
+Provider waterfall in reveal.config.json: ipinfo-lite (free), ipinfo--2 ($0.0005), people-data-labs-ip-enrich ($0.28, off by default), then company.enrich (job with fallback, from $0.0019).
 
 Docs: https://docs.looot.ai  Skill file: https://looot.ai/skill.md
