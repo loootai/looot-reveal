@@ -34,9 +34,36 @@ export interface IpInfo {
   tor: boolean;
   relay: boolean;
   hosting: boolean;
+  /** true for a mobile carrier address. */
+  mobile: boolean;
 }
 
-export type ExcludeReason = "private_ip" | "bogon" | "isp" | "hosting" | "vpn" | "no_domain" | "lookup_failed";
+export type ExcludeReason = "private_ip" | "bogon" | "isp" | "mobile" | "hosting" | "vpn" | "no_domain" | "skipped_range" | "lookup_failed";
+
+/** What one provider said about one IP. */
+export type AnswerOutcome =
+  /** A company, and the provider's evidence is strong enough to stop the waterfall. */
+  | "match"
+  /** A company, but only the registered network owner or a network of unknown type. */
+  | "weak"
+  /** The provider says this is not a company: ISP, mobile, hosting or VPN. */
+  | "excluded"
+  /** The provider answered and found no company. */
+  | "none"
+  | "failed"
+  | "pending";
+
+export interface ProviderAnswer {
+  provider: string;
+  endpointId: string;
+  outcome: AnswerOutcome;
+  name?: string;
+  domain?: string;
+  reason?: ExcludeReason;
+  costMicros: number;
+}
+
+export type Confidence = "high" | "medium" | "low";
 
 /** Fields from the company enrichment job, all optional because providers differ. */
 export interface CompanyProfile {
@@ -65,8 +92,15 @@ export interface Resolution {
   /** Company website the visit is attributed to. */
   domain?: string;
   name?: string;
-  /** Provider that supplied the IP lookup. */
+  /** Provider whose answer was used. */
   lookupProvider?: string;
+  /** high: a confident match nobody contradicts. medium: only a weak match (network owner). low: providers named different companies. */
+  confidence?: Confidence;
+  /** Every provider that was asked, in call order, with its answer and cost. */
+  answers?: ProviderAnswer[];
+  /** Other companies named by providers that disagree with the one above. Set only when confidence is low. */
+  alternatives?: { provider: string; name?: string; domain: string }[];
+  /** Total of the answers' costs. */
   costMicros: number;
   resolvedAt: string;
 }
@@ -104,6 +138,14 @@ export interface CompanyVisit {
   pages: { path: string; views: number }[];
   icp: IcpResult;
   costMicros: number;
+  /** Lowest confidence among the addresses attributed to this company. */
+  confidence: Confidence;
+  /** Which provider answered how many addresses, and what those answers cost. */
+  answeredBy: { provider: string; ips: number; costMicros: number }[];
+  /** Companies other providers named for the same addresses. Empty unless confidence is low. */
+  alternatives: { provider: string; name?: string; domain: string }[];
+  /** One entry per address: how it was resolved. The address itself is never shown. */
+  lookups: { confidence: Confidence; provider: string; costMicros: number; answers: ProviderAnswer[] }[];
 }
 
 export interface Excluded {

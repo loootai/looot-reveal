@@ -33,3 +33,13 @@ export function isNonPublicIp(ip: string): boolean {
 export function isIpAddress(s: string): boolean {
   return isIP(s) !== 0;
 }
+
+/** true when an IPv4 address is inside the CIDR range, for example 203.0.113.0/24. IPv6 and bad input never match. */
+export function inCidr(ip: string, cidr: string): boolean {
+  const [base, bitsText] = cidr.split("/");
+  const bits = Number(bitsText);
+  if (isIP(ip) !== 4 || isIP(base) !== 4 || !Number.isInteger(bits) || bits < 0 || bits > 32) return false;
+  const n = (a: string) => a.split(".").reduce((x, p) => x * 256 + Number(p), 0);
+  const size = 2 ** (32 - bits);
+  return Math.floor(n(ip) / size) === Math.floor(n(base) / size);
+}

@@ -8,7 +8,7 @@ import { parseVisits } from "@/lib/ingest";
 import { loootFromEnv, LoootError, type LoootRunner } from "@/lib/looot";
 import { toMicros, usd } from "@/lib/money";
 import { addVisits, purgeOld, quotePending, resolvePending } from "@/lib/state";
-import { loadConfig, loadState, saveState } from "@/lib/store";
+import { loadConfig, loadState, migrateLegacyState, saveState, statePathFromEnv } from "@/lib/store";
 import { PRICES_AS_OF } from "@/lib/sources";
 import { renderCsv, renderMarkdown, renderQuote } from "./render";
 
@@ -18,7 +18,7 @@ export const HELP = `Usage: npm run reveal -- --input <access.log|visits.csv> [o
   --format <f>       auto (default), combined, csv, jsonl
   --config <file>    reveal.config.json (ICP, weights, lookup, retention). Default: reveal.config.json, else built-in.
   --out <dir>        Where visitors.json, visitors.csv and visitors.md go. Default: reveal-out
-  --state <file>     Answers already bought, so repeat IPs are free. Default: state/reveal.json
+  --state <file>     Answers already bought, so repeat IPs are free. Default: REVEAL_DATA, else data/reveal.json (the web UI reads the same file)
   --cap <usd>        Spend cap for this run. Default: the config's spendCapUsd
   --dry-run          Print the list-price cost and make no call. Writes nothing.
 
@@ -39,7 +39,7 @@ export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
   const now = deps.now ?? new Date();
   let a;
   try {
-    a = parseArgs({ args: argv, options: { input: { type: "string" }, format: { type: "string", default: "auto" }, config: { type: "string" }, out: { type: "string", default: "reveal-out" }, state: { type: "string", default: "state/reveal.json" }, cap: { type: "string" }, "dry-run": { type: "boolean", default: false }, help: { type: "boolean", default: false } } }).values;
+    a = parseArgs({ args: argv, options: { input: { type: "string" }, format: { type: "string", default: "auto" }, config: { type: "string" }, out: { type: "string", default: "reveal-out" }, state: { type: "string" }, cap: { type: "string" }, "dry-run": { type: "boolean", default: false }, help: { type: "boolean", default: false } } }).values;
   } catch (e) {
     deps.err(`${(e as Error).message}\n\n${HELP}`);
     return 2;
@@ -60,13 +60,14 @@ export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
   if (!Number.isFinite(capUsd) || capUsd < 0) return deps.err("--cap must be a number of dollars."), 2;
   const capMicros = toMicros(capUsd);
 
-  const statePath = resolve(a.state as string);
+  const statePath = a.state ? resolve(a.state) : statePathFromEnv(deps.env);
+  if (!a.state) migrateLegacyState(statePath);
   const state = loadState(statePath);
   const parsed = parseVisits(readFileSync(a.input, "utf8"), a.format as LogFormat, now);
   const s = parsed.skipped;
   deps.out(`Read ${parsed.visits.length} page views (${parsed.format}). Skipped: ${s.assets} assets, ${s.bots} bots, ${s.errors} error responses, ${s.badRows} unreadable rows.`);
-  addVisits(state, parsed.visits, config);
-  const quote = quotePending(state, config, capMicros);
+  addVisits(state, parsed.visits, config, now);
+  const quote = quotePending(state, config, capMicros, now);
   deps.out(renderQuote(quote, `List prices dated ${PRICES_AS_OF}. The real charge is read from each run.`));
 
   if (a["dry-run"]) {

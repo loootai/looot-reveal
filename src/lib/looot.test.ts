@@ -36,7 +36,7 @@ describe("LoootClient", () => {
 describe("config", () => {
   it("fills defaults and rejects a bad signal with the field named", () => {
     const c = ConfigSchema.parse({});
-    expect(c).toMatchObject({ lookup: "ipinfo", enrich: true, retentionDays: 30, storeRawIp: false });
+    expect(c).toMatchObject({ enrich: true, retentionDays: 30, storeRawIp: false });
     expect(() => parseConfig(JSON.stringify({ icp: { signals: [{ id: "x", label: "x", weight: 1, kind: "text", field: "industry", anyOf: [] }] } }))).toThrow();
   });
   it("ships a default ICP whose weights add up to 8", () => {

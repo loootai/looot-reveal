@@ -1,7 +1,9 @@
 import type { RevealConfig } from "./config";
 import type { CompanyEntry } from "./engine";
 import { scoreIcp } from "./icp";
-import type { CompanyVisit, Excluded, Resolution, StoredVisit } from "./types";
+import type { CompanyVisit, Confidence, Excluded, Resolution, StoredVisit } from "./types";
+
+const RANK: Record<Confidence, number> = { low: 0, medium: 1, high: 2 };
 
 export interface Feed {
   companies: CompanyVisit[];
@@ -56,6 +58,18 @@ export function buildFeed(visits: StoredVisit[], resolutions: Record<string, Res
       paths: a.visits.map((v) => v.path),
     });
     const lookupCost = [...a.ipKeys].reduce((n, k) => n + (resolutions[k]?.costMicros ?? 0), 0);
+    const rs = [...a.ipKeys].map((k) => resolutions[k]).filter((r): r is Resolution => Boolean(r));
+    const confOf = (r: Resolution): Confidence => r.confidence ?? "high";
+    const confidence = rs.reduce<Confidence>((m, r) => (RANK[confOf(r)] < RANK[m] ? confOf(r) : m), "high");
+    const answeredBy = new Map<string, { provider: string; ips: number; costMicros: number }>();
+    for (const r of rs) {
+      const prov = r.lookupProvider ?? "ip.lookup";
+      const e = answeredBy.get(prov) ?? { provider: prov, ips: 0, costMicros: 0 };
+      e.ips++;
+      e.costMicros += r.costMicros;
+      answeredBy.set(prov, e);
+    }
+    const alternatives = rs.flatMap((r) => r.alternatives ?? []).filter((x, i, all) => all.findIndex((y) => y.domain === x.domain && y.provider === x.provider) === i);
     return {
       domain: a.domain,
       name: profile?.name ?? a.name,
@@ -68,6 +82,10 @@ export function buildFeed(visits: StoredVisit[], resolutions: Record<string, Res
       pages: [...pageCounts].map(([path, views]) => ({ path, views })).sort((x, y) => y.views - x.views),
       icp,
       costMicros: lookupCost + (entry?.costMicros ?? 0),
+      confidence,
+      answeredBy: [...answeredBy.values()],
+      alternatives,
+      lookups: rs.map((r) => ({ confidence: confOf(r), provider: r.lookupProvider ?? "ip.lookup", costMicros: r.costMicros, answers: r.answers ?? [] })),
     };
   });
   out.sort((x, y) => Number(y.icp.matched) - Number(x.icp.matched) || y.lastSeen.localeCompare(x.lastSeen));

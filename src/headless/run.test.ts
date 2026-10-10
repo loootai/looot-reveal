@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { LoootRunner } from "@/lib/looot";
+import { buildFeed } from "@/lib/feed";
+import { loadState, statePathFromEnv } from "@/lib/store";
 import { runCli } from "./run";
 
 const NOW = new Date("2026-10-10T12:00:00Z");
@@ -42,14 +44,16 @@ describe("runCli", () => {
     expect(json.companies[0]).toMatchObject({ domain: "brightloop.example", visits: 2 });
     expect(readFileSync(join(t.dir, "out", "visitors.csv"), "utf8")).toContain('"Brightloop","brightloop.example"');
     expect(readFileSync(join(t.dir, "out", "visitors.md"), "utf8")).toContain("## Why these match");
-    expect(t.looot.runAndWait).toHaveBeenCalledTimes(2);
+    // IPinfo Lite finds nothing in this mock, then IPinfo full answers, then one enrichment.
+    expect(t.looot.runAndWait).toHaveBeenCalledTimes(3);
     expect(await runCli(t.args(), t.deps)).toBe(0);
-    expect(t.looot.runAndWait).toHaveBeenCalledTimes(2);
+    expect(t.looot.runAndWait).toHaveBeenCalledTimes(3);
   });
   it("stops at --cap and says so", async () => {
     const t = setup();
     await runCli(t.args("--cap", "0.0001"), t.deps);
-    expect(t.looot.runAndWait).not.toHaveBeenCalled();
+    // Only the free provider fits under the cap.
+    expect(t.looot.runAndWait).toHaveBeenCalledTimes(1);
     expect(t.out.join("\n")).toContain("Stopped at the $0.0001 cap");
   });
   it("exits 2 without LOOOT_TOKEN, and for a missing --input", async () => {
@@ -57,5 +61,33 @@ describe("runCli", () => {
     expect(await runCli(t.args(), { ...t.deps, looot: undefined })).toBe(2);
     expect(t.err.join("\n")).toContain("LOOOT_TOKEN is not set");
     expect(await runCli([], t.deps)).toBe(2);
+  });
+
+  it("writes to the file the web UI reads, so a CLI run shows up in the UI", async () => {
+    const t = setup();
+    const REVEAL_DATA = join(t.dir, "shared", "reveal.json");
+    const env = { REVEAL_DATA };
+    const args = ["--input", join(t.dir, "access.log"), "--out", join(t.dir, "out"), "--config", join(t.dir, "none.json")];
+    expect(await runCli(args, { ...t.deps, env })).toBe(0);
+    // The UI resolves its path with the same function, from the same variable.
+    const uiPath = statePathFromEnv(env);
+    expect(uiPath).toBe(REVEAL_DATA);
+    const state = loadState(uiPath);
+    const feed = buildFeed(state.visits, state.resolutions, state.companies, (await import("@/lib/config")).DEFAULT_CONFIG);
+    expect(feed.companies.map((c) => c.domain)).toEqual(["brightloop.example"]);
+  });
+  it("uses data/reveal.json by default and moves an old state/reveal.json there", async () => {
+    const { migrateLegacyState, statePathFromEnv: p } = await import("@/lib/store");
+    expect(p({}).endsWith(join("data", "reveal.json"))).toBe(true);
+    const t = setup();
+    const legacy = join(t.dir, "state", "reveal.json");
+    const target = join(t.dir, "data", "reveal.json");
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(join(t.dir, "state"));
+    writeFileSync(legacy, '{"version":1}');
+    expect(migrateLegacyState(target, legacy)).toBe(true);
+    expect(existsSync(legacy)).toBe(false);
+    expect(readFileSync(target, "utf8")).toBe('{"version":1}');
+    expect(migrateLegacyState(target, legacy)).toBe(false);
   });
 });

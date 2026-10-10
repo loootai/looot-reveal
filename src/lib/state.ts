@@ -3,6 +3,7 @@ import type { RevealConfig } from "./config";
 import { buildQuote, type Quote } from "./quote";
 import { resolveIps, type CompanyEntry, type EngineOutput } from "./engine";
 import type { LoootRunner } from "./looot";
+import { isFresh } from "./waterfall";
 import type { CallRecord, Resolution, StoredVisit, Visit } from "./types";
 
 /** Everything the app remembers. One JSON file on disk, or memory in demo mode. */
@@ -27,14 +28,14 @@ export function ipKeyOf(ip: string, state: Pick<State, "salt">, config: RevealCo
   return config.storeRawIp ? ip : createHash("sha256").update(`${state.salt}:${ip}`).digest("hex").slice(0, 16);
 }
 
-/** Adds visits. IPs that have no stored answer yet are kept as pending until a run resolves them. */
-export function addVisits(state: State, visits: Visit[], config: RevealConfig): { added: number; newIps: number } {
+/** Adds visits. IPs with no stored answer, or one past the cache window, are kept as pending until a run resolves them. */
+export function addVisits(state: State, visits: Visit[], config: RevealConfig, now: Date = new Date()): { added: number; newIps: number } {
   let newIps = 0;
   for (const v of visits) {
     const key = ipKeyOf(v.ip, state, config);
     state.visits.push({ ipKey: key, path: v.path, ts: v.ts, ...(v.referrer ? { referrer: v.referrer } : {}) });
     const r = state.resolutions[key];
-    if (!r || r.status === "pending" || r.status === "failed") {
+    if (!r || r.status === "pending" || r.status === "failed" || !isFresh(r, config, now)) {
       if (!state.pendingIps[key]) newIps++;
       state.pendingIps[key] = v.ip;
     }
@@ -43,11 +44,11 @@ export function addVisits(state: State, visits: Visit[], config: RevealConfig): 
 }
 
 /** Quote for resolving every pending IP. */
-export function quotePending(state: State, config: RevealConfig, capMicros: number): Quote {
+export function quotePending(state: State, config: RevealConfig, capMicros: number, now: Date = new Date()): Quote {
   const ips = Object.values(state.pendingIps);
   const cache: Record<string, Resolution> = {};
   for (const [key, ip] of Object.entries(state.pendingIps)) if (state.resolutions[key]) cache[ip] = state.resolutions[key];
-  return buildQuote(ips, cache, config, capMicros);
+  return buildQuote(ips, cache, config, capMicros, now);
 }
 
 /** Resolves the pending IPs and writes the answers back. Raw IPs are dropped once an IP has a final answer. */

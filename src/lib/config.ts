@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** Words in a network owner name that mark a consumer ISP, a mobile carrier or a host. Used when the provider gives no network type. Edit the list in reveal.config.json. */
+export const DEFAULT_HINTS = ["comcast", "verizon", "at&t", "spectrum", "charter", "cox comm", "vodafone", "orange", "telefonica", "deutsche telekom", "bt group", "virgin media", "sky broadband", "t-mobile", "free sas", "bouygues", "amazon", "google llc", "microsoft", "digitalocean", "ovh", "hetzner", "cloudflare", "akamai", "linode", "vultr", "broadband", "wireless", "mobile", "cellular", "residential", "telecom", "telekom", "hosting", "cloud"];
+
 const signalBase = { id: z.string().min(1), label: z.string().min(1), weight: z.number().min(0).max(100) };
 
 /** One ICP check. Weights are edited in reveal.config.json. */
@@ -10,9 +13,57 @@ export const IcpSignalSchema = z.discriminatedUnion("kind", [
 ]);
 export type IcpSignal = z.infer<typeof IcpSignalSchema>;
 
-export const ConfigSchema = z.object({
-  /** ipinfo is the full lookup ($0.0005), ipinfo-lite is free and has the ASN owner but no network type. */
-  lookup: z.enum(["ipinfo", "ipinfo-lite"]).default("ipinfo"),
+/** How much a provider's answer proves. asn_owner: the registered owner of the network, never enough to stop. network_type: the answer says if the network is a business, ISP or host. company: the provider resolves the IP to a company itself. */
+export const TrustSchema = z.enum(["asn_owner", "network_type", "company"]);
+export type Trust = z.infer<typeof TrustSchema>;
+
+/** One IP-to-company provider in the waterfall. Order in the list is the order of the calls. */
+export const ProviderSchema = z.object({
+  /** Short name shown in the feed and the costs page. Unique. */
+  id: z.string().min(1).regex(/^[a-z0-9][a-z0-9-]*$/, "use lowercase letters, digits and dashes"),
+  /** looot endpoint id the call is sent to. */
+  endpointId: z.string().min(1),
+  label: z.string().min(1),
+  /** Which response parser reads the answer. "ipinfo" reads IPinfo bodies, "pdl" reads People Data Labs IP enrichment bodies. */
+  adapter: z.enum(["ipinfo", "pdl"]),
+  trust: TrustSchema,
+  /** List price of one call in dollars, from the looot catalog. Used for the quote and the cap. */
+  priceUsd: z.number().min(0),
+  enabled: z.boolean().default(true),
+});
+export type ProviderConfig = z.infer<typeof ProviderSchema>;
+
+/** The providers looot lists today for IP to company, cheapest first. Prices read from the public catalog on 2026-10-10. */
+export const DEFAULT_PROVIDERS: ProviderConfig[] = [
+  { id: "ipinfo-lite", endpointId: "ipinfo-lite", label: "IPinfo Lite (ASN owner)", adapter: "ipinfo", trust: "asn_owner", priceUsd: 0, enabled: true },
+  { id: "ipinfo", endpointId: "ipinfo--2", label: "IPinfo (full lookup)", adapter: "ipinfo", trust: "network_type", priceUsd: 0.0005, enabled: true },
+  { id: "people-data-labs", endpointId: "people-data-labs-ip-enrich", label: "People Data Labs (IP enrichment)", adapter: "pdl", trust: "company", priceUsd: 0.28, enabled: false },
+];
+
+export const WaterfallSchema = z
+  .object({
+    providers: z.array(ProviderSchema).min(1).default(DEFAULT_PROVIDERS),
+    /** true: after the first confident match, ask one more company-level provider and compare. Costs more, catches wrong matches. */
+    crossCheck: z.boolean().default(false),
+    /** A stored answer for an IP is reused for this many days, then looked up again. 0 looks every IP up on every run. */
+    cacheDays: z.number().int().min(0).max(3650).default(30),
+    /** IPv4 ranges (CIDR) that are never looked up, for example your own office or a known ISP block. */
+    skipCidrs: z.array(z.string().regex(/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/, "use an IPv4 range like 203.0.113.0/24")).default([]),
+  })
+  .refine((w) => new Set(w.providers.map((p) => p.id)).size === w.providers.length, { message: "provider ids must be unique" });
+export type WaterfallConfig = z.infer<typeof WaterfallSchema>;
+
+/** Old configs had `lookup: "ipinfo" | "ipinfo-lite"`. Turn that into a waterfall with the other providers off. */
+function upgradeOldConfig(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const o = raw as Record<string, unknown>;
+  if (o.waterfall !== undefined || (o.lookup !== "ipinfo" && o.lookup !== "ipinfo-lite")) return raw;
+  const { lookup, ...rest } = o;
+  return { ...rest, waterfall: { providers: DEFAULT_PROVIDERS.map((p) => ({ ...p, enabled: lookup === "ipinfo-lite" ? p.id === "ipinfo-lite" : p.id !== "people-data-labs" })) } };
+}
+
+const ConfigObject = z.object({
+  waterfall: WaterfallSchema.default({ providers: DEFAULT_PROVIDERS, crossCheck: false, cacheDays: 30, skipCidrs: [] }),
   /** Run the company enrichment job on each new company domain. */
   enrich: z.boolean().default(true),
   /** Hard cap for one run, in dollars. A run stops before a call that would pass it. */
@@ -23,7 +74,7 @@ export const ConfigSchema = z.object({
   storeRawIp: z.boolean().default(false),
   ignorePaths: z.array(z.string()).default(["/api", "/_next", "/favicon.ico", "/robots.txt", "/sitemap.xml"]),
   /** Names of networks that are consumer ISPs or clouds, used when the provider gives no network type. */
-  networkNameHints: z.array(z.string()).default(["comcast", "verizon", "at&t", "spectrum", "charter", "cox comm", "vodafone", "orange", "telefonica", "deutsche telekom", "bt group", "virgin media", "sky broadband", "t-mobile", "free sas", "bouygues", "amazon", "google llc", "microsoft", "digitalocean", "ovh", "hetzner", "cloudflare", "akamai", "linode", "vultr"]),
+  networkNameHints: z.array(z.string()).default(DEFAULT_HINTS),
   icp: z
     .object({
       threshold: z.number().min(0).default(3),
@@ -31,7 +82,8 @@ export const ConfigSchema = z.object({
     })
     .default({ threshold: 3, signals: [] }),
 });
-export type RevealConfig = z.infer<typeof ConfigSchema>;
+export const ConfigSchema = z.preprocess(upgradeOldConfig, ConfigObject) as unknown as z.ZodType<RevealConfig, unknown>;
+export type RevealConfig = z.infer<typeof ConfigObject>;
 
 /** The config a new install starts with. Edit reveal.config.json to change it. */
 export const DEFAULT_CONFIG: RevealConfig = ConfigSchema.parse({

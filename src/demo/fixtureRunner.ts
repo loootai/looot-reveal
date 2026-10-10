@@ -4,7 +4,7 @@ import type { LoootRun, LoootRunner } from "@/lib/looot";
 interface Net {
   name: string;
   domain: string;
-  type: "business" | "isp" | "hosting" | "education" | "government";
+  type: "business" | "isp" | "hosting" | "education" | "government" | "unknown";
   country: string;
   city: string;
   region: string;
@@ -19,6 +19,9 @@ export const DEMO_NETS: Record<string, Net> = {
   "203.0.113.40": { name: "Orbit Payments", domain: "orbitpay.example", type: "business", country: "DE", city: "Berlin", region: "Berlin" },
   "203.0.113.50": { name: "Pine Valley University", domain: "pinevalley.example", type: "education", country: "CA", city: "Calgary", region: "Alberta" },
   "203.0.113.60": { name: "Lumen Retail Group", domain: "lumenretail.example", type: "business", country: "FR", city: "Lyon", region: "Auvergne-Rhone-Alpes" },
+  // IPinfo gives the owner but no network type for these two, so the waterfall asks People Data Labs.
+  "203.0.113.55": { name: "Delta Works Ltd", domain: "deltaworks.example", type: "unknown", country: "GB", city: "Bristol", region: "England" },
+  "203.0.113.65": { name: "Tandem Networks", domain: "tandemnet.example", type: "unknown", country: "US", city: "Chicago", region: "Illinois" },
   "198.51.100.10": { name: "Example Broadband", domain: "examplebroadband.example", type: "isp", country: "US", city: "Denver", region: "Colorado" },
   "198.51.100.11": { name: "Example Broadband", domain: "examplebroadband.example", type: "isp", country: "US", city: "Dallas", region: "Texas" },
   "198.51.100.12": { name: "Example Mobile", domain: "examplemobile.example", type: "isp", country: "GB", city: "Leeds", region: "England" },
@@ -26,11 +29,19 @@ export const DEMO_NETS: Record<string, Net> = {
   "198.51.100.30": { name: "Private Relay Network", domain: "privaterelay.example", type: "business", country: "US", city: "Newark", region: "New Jersey", vpn: true },
 };
 
+/** Made-up People Data Labs answers for the addresses IPinfo could not settle. The second one names a different company than IPinfo does. */
+const DEMO_PDL: Record<string, { name: string; website: string; industry: string; country: string }> = {
+  "203.0.113.55": { name: "Delta Works Ltd", website: "https://www.deltaworks.example", industry: "Engineering Services", country: "gb" },
+  "203.0.113.65": { name: "Marlow & Pike Architects", website: "marlowpike.example", industry: "Architecture", country: "us" },
+};
+
 const COMPANIES: Record<string, { name: string; industry: string; employee_count: number; country: string; description: string }> = {
   "brightloop.example": { name: "Brightloop Software", industry: "Software Development", employee_count: 180, country: "US", description: "Scheduling software for field service teams." },
   "harborfinch.example": { name: "Harbor & Finch Consulting", industry: "Management Consulting", employee_count: 45, country: "GB", description: "Operations consulting for mid-size manufacturers." },
   "kestrellogistics.example": { name: "Kestrel Logistics", industry: "Transportation and Logistics", employee_count: 3200, country: "NL", description: "Road freight and warehousing across the Benelux." },
   "orbitpay.example": { name: "Orbit Payments", industry: "Financial Technology", employee_count: 95, country: "DE", description: "Payment links for small online shops." },
+  "deltaworks.example": { name: "Delta Works Ltd", industry: "Engineering Services", employee_count: 60, country: "GB", description: "Contract engineering for water utilities." },
+  "marlowpike.example": { name: "Marlow & Pike Architects", industry: "Architecture", employee_count: 35, country: "US", description: "Mid-size commercial architecture studio." },
   "pinevalley.example": { name: "Pine Valley University", industry: "Higher Education", employee_count: 1400, country: "CA", description: "Public university with 18,000 students." },
   "lumenretail.example": { name: "Lumen Retail Group", industry: "Retail", employee_count: 620, country: "FR", description: "Home goods stores in eastern France." },
 };
@@ -42,6 +53,11 @@ export class DemoRunner implements LoootRunner {
   calls = 0;
   async runAndWait(endpointId: string, input: Record<string, unknown>): Promise<LoootRun> {
     this.calls++;
+    if (endpointId === "people-data-labs-ip-enrich") {
+      const hit = DEMO_PDL[String(input.ip)];
+      if (!hit) return { runId: `demo_${this.calls}`, status: "failed", error: { code: "not_found", message: "No match (404)" }, actualCost: 0 };
+      return ok({ status: 200, data: { ip: { address: String(input.ip), metadata: { version: 4 } }, company: { name: hit.name, website: hit.website, industry: hit.industry, location: { country: hit.country } } } }, 0.28, this.calls);
+    }
     if (endpointId.startsWith("ipinfo")) {
       const ip = String(input.ip);
       const net = DEMO_NETS[ip] ?? { name: "Example Broadband", domain: "examplebroadband.example", type: "isp" as const, country: "US", city: "Unknown", region: "Unknown" };
@@ -52,8 +68,8 @@ export class DemoRunner implements LoootRunner {
           city: net.city,
           region: net.region,
           country: net.country,
-          asn: { asn: "AS64500", name: net.name, domain: net.domain, type: net.type },
-          company: { name: net.name, domain: net.domain, type: net.type },
+          asn: { asn: "AS64500", name: net.name, domain: net.domain, ...(net.type === "unknown" ? {} : { type: net.type }) },
+          company: { name: net.name, domain: net.domain, ...(net.type === "unknown" ? {} : { type: net.type }) },
           privacy: { vpn: net.vpn ?? false, proxy: false, tor: false, relay: false, hosting: net.type === "hosting" },
         },
         0.0005,

@@ -54,10 +54,52 @@ export function parseIpInfo(ip: string, body: unknown): IpInfo {
     region: str(b.region),
     city: str(b.city),
     vpn: privacy.vpn === true,
-    proxy: privacy.proxy === true,
+    proxy: privacy.proxy === true || privacy.res_proxy === true,
     tor: privacy.tor === true,
     relay: privacy.relay === true,
     hosting: privacy.hosting === true || kindOf(company.type ?? asn.type) === "hosting",
+    // IPinfo adds a `carrier` object (name, mcc, mnc) for mobile networks.
+    mobile: isObj(b.carrier),
+  };
+}
+
+const hostOf = (v: unknown): string | undefined => {
+  const t = str(v);
+  if (!t) return undefined;
+  return t.toLowerCase().replace(/^[a-z]+:\/\//, "").replace(/^www\./, "").split(/[/?#]/)[0] || undefined;
+};
+
+/**
+ * Normalises a People Data Labs IP enrichment body into the same shape as an IPinfo answer.
+ * PDL resolves the IP to a company itself, so a present `company` means a company-level match.
+ * Only company fields are read. A `person` object, if the provider ever sends one, is ignored.
+ * Built from the endpoint description in the looot catalog, not from a recorded paid call.
+ */
+export function parsePdlIp(ip: string, body: unknown): IpInfo {
+  const b = unwrap(body);
+  const d = isObj(b.data) ? b.data : b;
+  const company = isObj(d.company) ? d.company : {};
+  const ipObj = isObj(d.ip) ? d.ip : {};
+  const meta = isObj(ipObj.metadata) ? ipObj.metadata : {};
+  const loc = isObj(ipObj.location) ? ipObj.location : {};
+  const cLoc = isObj(company.location) ? company.location : {};
+  const flag = (k: string) => meta[k] === true || ipObj[k] === true;
+  const name = str(company.name);
+  return {
+    ip,
+    bogon: false,
+    name,
+    domain: hostOf(company.website) ?? hostOf(company.domain),
+    kind: name ? "business" : "unknown",
+    country: str(cLoc.country) ?? str(loc.country),
+    region: str(cLoc.region) ?? str(loc.region),
+    city: str(cLoc.locality) ?? str(loc.locality),
+    vpn: flag("vpn"),
+    proxy: flag("proxy"),
+    tor: flag("tor"),
+    relay: false,
+    hosting: flag("hosting") || flag("datacenter"),
+    mobile: flag("mobile"),
   };
 }
 

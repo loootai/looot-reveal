@@ -1,18 +1,23 @@
 import "server-only";
 import { resolve } from "node:path";
-import { buildDemoState, DemoRunner } from "@/demo/seed";
-import { ConfigSchema, DEFAULT_CONFIG, type RevealConfig } from "./config";
+import { buildDemoState, DEMO_CONFIG, DemoRunner } from "@/demo/seed";
+import { ConfigSchema, type RevealConfig } from "./config";
 import { buildFeed, type Feed } from "./feed";
 import { addVisits, purgeOld, quotePending, resolvePending, type State } from "./state";
 import { hasLoootToken, loootFromEnv, type LoootRunner } from "./looot";
 import { parseVisits, type LogFormat } from "./ingest";
 import { toMicros } from "./money";
 import type { Quote } from "./quote";
-import { loadConfig, loadState, saveConfig, saveState } from "./store";
+import type { CallRecord } from "./types";
+import { loadConfig, loadState, migrateLegacyState, saveConfig, saveState, statePathFromEnv } from "./store";
 
 export const isDemo = (): boolean => process.env.NEXT_PUBLIC_DEMO === "1";
 
-const statePath = () => resolve(/* turbopackIgnore: true */ process.env.REVEAL_DATA ?? "data/reveal.json");
+const statePath = () => {
+  const p = statePathFromEnv();
+  migrateLegacyState(p);
+  return p;
+};
 const configPath = () => resolve(/* turbopackIgnore: true */ process.env.REVEAL_CONFIG ?? "reveal.config.json");
 
 const g = globalThis as unknown as { __revealDemo?: Promise<{ state: State; config: RevealConfig }> };
@@ -20,7 +25,7 @@ const g = globalThis as unknown as { __revealDemo?: Promise<{ state: State; conf
 /** In demo mode the state lives in memory and resets on restart. Otherwise it is a JSON file. */
 async function open(): Promise<{ state: State; config: RevealConfig; save: () => void; looot: LoootRunner | null }> {
   if (isDemo()) {
-    g.__revealDemo ??= buildDemoState().then((state) => ({ state, config: DEFAULT_CONFIG }));
+    g.__revealDemo ??= buildDemoState().then((state) => ({ state, config: DEMO_CONFIG }));
     const d = await g.__revealDemo;
     return { ...d, save: () => {}, looot: new DemoRunner() };
   }
@@ -36,16 +41,32 @@ export interface View {
   pendingIps: number;
   quote: Quote;
   spentMicros: number;
+  /** Every looot call the state remembers, grouped by provider, plus the latest ones. */
+  costs: { byProvider: { provider: string; job: string; calls: number; failed: number; costMicros: number }[]; recent: CallRecord[] };
   retention: { days: number; oldest: string | null };
   /** Server time in ms, so pages show relative times without calling the clock while rendering. */
   now: number;
+}
+
+/** Groups the call log by provider and job. Recent calls are newest first. */
+export function summariseCalls(calls: CallRecord[]): View["costs"] {
+  const map = new Map<string, { provider: string; job: string; calls: number; failed: number; costMicros: number }>();
+  for (const c of calls) {
+    const k = `${c.job}|${c.providerId}`;
+    const e = map.get(k) ?? { provider: c.providerId, job: c.job, calls: 0, failed: 0, costMicros: 0 };
+    e.calls++;
+    if (c.status !== "completed") e.failed++;
+    e.costMicros += c.costMicros;
+    map.set(k, e);
+  }
+  return { byProvider: [...map.values()].sort((a, b) => b.costMicros - a.costMicros), recent: [...calls].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 25) };
 }
 
 /** Everything a page needs, computed from the stored state. Free: makes no looot call. */
 export async function getView(): Promise<View> {
   const { state, config, looot } = await open();
   const feed = buildFeed(state.visits, state.resolutions, state.companies, config);
-  const quote = quotePending(state, config, Math.round(config.spendCapUsd * 1_000_000));
+  const quote = quotePending(state, config, Math.round(config.spendCapUsd * 1_000_000), new Date());
   const oldest = state.visits.reduce<string | null>((m, v) => (m === null || v.ts < m ? v.ts : m), null);
   return {
     demo: isDemo(),
@@ -55,6 +76,7 @@ export async function getView(): Promise<View> {
     pendingIps: Object.keys(state.pendingIps).length,
     quote,
     spentMicros: state.calls.reduce((n, c) => n + c.costMicros, 0),
+    costs: summariseCalls(state.calls),
     retention: { days: config.retentionDays, oldest },
     now: Date.now(),
   };
