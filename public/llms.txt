@@ -2,6 +2,9 @@
 
 Open-source website visitor to company lookup. Input: an access log, a CSV of IPs, or a tracking snippet. Output: the companies that visited, the pages they viewed and an ICP flag with the signals behind it. Company-level only, never person-level.
 
+## Setup
+Node 20.9+ (tests 22.12+), `npm ci`. Real lookups need LOOOT_TOKEN (`looot login`, or looot Settings > Agent tokens; scopes runs.execute, catalog.read, runs.read, usage.read) and a funded balance (top-up from $5). The CLI reads the shell environment, not .env.local. Examples: examples/access.log, examples/visits.csv. Full setup, env table and troubleshooting are in README.md.
+
 ## Run it
 - Dry run, no token, no call: npm run reveal -- --input examples/access.log --dry-run
 - Real run: LOOOT_TOKEN=... npm run reveal -- --input access.log --cap 0.50

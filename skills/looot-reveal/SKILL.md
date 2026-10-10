@@ -5,7 +5,7 @@ description: Turn a web server access log or a CSV of visitor IPs into a list of
 
 # looot-reveal
 
-Run from the repository root. Needs Node 22 and `npm ci`.
+Run from the repository root. Needs Node 20.9+ (Node 22.12+ for the tests) and `npm ci`. Token, balance and troubleshooting are in the README under "What you need" and "Troubleshooting".
 
 1. Always dry run first and show the user the quote:
    `npm run reveal -- --input <file> --dry-run`
