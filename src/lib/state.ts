@@ -4,6 +4,8 @@ import { buildQuote, type Quote } from "./quote";
 import { resolveIps, type CompanyEntry, type EngineOutput } from "./engine";
 import type { LoootRunner } from "./looot";
 import { isFresh } from "./waterfall";
+import type { PersonState } from "./person/types";
+import { purgePerson } from "./person/store";
 import type { CallRecord, Resolution, StoredVisit, Visit } from "./types";
 
 /** Everything the app remembers. One JSON file on disk, or memory in demo mode. */
@@ -17,6 +19,8 @@ export interface State {
   resolutions: Record<string, Resolution>;
   companies: Record<string, CompanyEntry>;
   calls: CallRecord[];
+  /** Person-level data. Absent until the feature is used. Never created while it is off, except by an opt-out. */
+  person?: PersonState;
 }
 
 export function emptyState(): State {
@@ -73,8 +77,8 @@ export async function resolvePending(state: State, config: RevealConfig, looot: 
   return out;
 }
 
-/** Deletes visits, answers and call records older than the retention window. Returns what it removed. */
-export function purgeOld(state: State, config: RevealConfig, now: Date): { visits: number; resolutions: number } {
+/** Deletes visits, answers and call records older than the retention window, and person-level data older than its own window. Returns what it removed. */
+export function purgeOld(state: State, config: RevealConfig, now: Date): { visits: number; resolutions: number; people: number } {
   const cutoff = new Date(now.getTime() - config.retentionDays * 86_400_000).toISOString();
   const before = { visits: state.visits.length, resolutions: Object.keys(state.resolutions).length };
   state.visits = state.visits.filter((v) => v.ts >= cutoff);
@@ -83,5 +87,6 @@ export function purgeOld(state: State, config: RevealConfig, now: Date): { visit
   const kept = new Set(Object.values(state.resolutions).map((r) => r.domain));
   for (const d of Object.keys(state.companies)) if (!kept.has(d)) delete state.companies[d];
   state.calls = state.calls.filter((c) => c.at >= cutoff);
-  return { visits: before.visits - state.visits.length, resolutions: before.resolutions - Object.keys(state.resolutions).length };
+  const person = purgePerson(state, config, now);
+  return { visits: before.visits - state.visits.length, resolutions: before.resolutions - Object.keys(state.resolutions).length, people: person.people };
 }

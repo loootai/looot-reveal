@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PersonLevelSchema } from "./person/schema";
 
 /** Words in a network owner name that mark a consumer ISP, a mobile carrier or a host. Used when the provider gives no network type. Edit the list in reveal.config.json. */
 export const DEFAULT_HINTS = ["comcast", "verizon", "at&t", "spectrum", "charter", "cox comm", "vodafone", "orange", "telefonica", "deutsche telekom", "bt group", "virgin media", "sky broadband", "t-mobile", "free sas", "bouygues", "amazon", "google llc", "microsoft", "digitalocean", "ovh", "hetzner", "cloudflare", "akamai", "linode", "vultr", "broadband", "wireless", "mobile", "cellular", "residential", "telecom", "telekom", "hosting", "cloud"];
@@ -75,6 +76,8 @@ const ConfigObject = z.object({
   ignorePaths: z.array(z.string()).default(["/api", "/_next", "/favicon.ico", "/robots.txt", "/sitemap.xml"]),
   /** Names of networks that are consumer ISPs or clouds, used when the provider gives no network type. */
   networkNameHints: z.array(z.string()).default(DEFAULT_HINTS),
+  /** Optional person-level identification. Off by default; see the README section on it. */
+  personLevel: PersonLevelSchema.prefault({}),
   icp: z
     .object({
       threshold: z.number().min(0).default(3),
