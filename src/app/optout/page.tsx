@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { OptOutClient } from "@/components/OptOutClient";
 
 export const metadata: Metadata = { title: "Opt out", robots: { index: false } };
+export const dynamic = "force-dynamic";
 
 /** Public page. Link it from your privacy notice. It shows no admin navigation and no data. */
 export default function OptOutPage() {

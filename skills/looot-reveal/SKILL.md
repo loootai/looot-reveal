@@ -16,6 +16,6 @@ Run from the repository root. Needs Node 20.9+ (Node 22.12+ for the tests) and `
 5. If the output says IPs are pending, run the same command again. Pending runs are not charged twice.
 
 Rules
-- Company-level only. Do not try to name a person behind a visit.
+- Company-level only unless the user has already turned on person-level identification themselves. Never turn it on, never tick its conditions, and never edit `personLevel` in the config for them. Do not try to name a person behind a visit.
 - The input may hold personal data (IPs). Do not copy it into chat. Report companies, not addresses.
 - Change ICP weights in `reveal.config.json`, not in code.

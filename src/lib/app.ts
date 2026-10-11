@@ -1,7 +1,7 @@
 import "server-only";
 import { resolve } from "node:path";
 import { buildDemoState, DEMO_CONFIG } from "@/demo/seed";
-import { demoSupplierFetch, DemoPersonRunner } from "@/demo/personDemo";
+import { demoEnv, demoSupplierFetch, DemoPersonRunner } from "@/demo/personDemo";
 import { ConfigSchema, type RevealConfig } from "./config";
 import { buildFeed, type Feed } from "./feed";
 import { addVisits, purgeOld, quotePending, resolvePending, type State } from "./state";
@@ -10,7 +10,7 @@ import { parseVisits, type LogFormat } from "./ingest";
 import { toMicros } from "./money";
 import type { Quote } from "./quote";
 import { isPersonLevelActive } from "./person/gates";
-import { queuePersonVisit, runPersonLookups, type VisitSignals } from "./person/engine";
+import { PERSON_IDENTIFY_JOB, queuePersonVisit, runPersonLookups, type VisitSignals } from "./person/engine";
 import { addAudit, deleteByEmail, importSuppression, optOutEmail, purgePerson, removeSuppression } from "./person/store";
 import { buildPersonView, type PersonView } from "./person/view";
 import type { SuppressionEntry } from "./person/types";
@@ -83,7 +83,7 @@ export async function getView(): Promise<View> {
     feed,
     pendingIps: Object.keys(state.pendingIps).length,
     quote,
-    spentMicros: state.calls.reduce((n, c) => n + c.costMicros, 0),
+    spentMicros: state.calls.filter((c) => c.job !== PERSON_IDENTIFY_JOB).reduce((n, c) => n + c.costMicros, 0),
     costs: summariseCalls(state.calls),
     retention: { days: config.retentionDays, oldest },
     person: buildPersonView(state, config),
@@ -142,7 +142,7 @@ export async function runPerson(capUsd: number | undefined) {
   if (!isPersonLevelActive(config)) throw new Error("Person-level identification is off.");
   const cap = toMicros(capUsd ?? config.personLevel.spendCapUsd);
   const demoMode = isDemo();
-  const out = await runPersonLookups(state, config, { looot, fetch: demoMode ? demoSupplierFetch : fetch, env: process.env, now: new Date(), capMicros: cap });
+  const out = await runPersonLookups(state, config, { looot, fetch: demoMode ? demoSupplierFetch : fetch, env: demoMode ? demoEnv : process.env, now: new Date(), capMicros: cap });
   save();
   return { ...out, pending: state.person?.pending.length ?? 0 };
 }

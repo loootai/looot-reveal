@@ -52,7 +52,10 @@ export class DemoPersonRunner implements LoootRunner {
   }
 }
 
-export const personDemoDeps = (now: Date, capMicros = 5_000_000): PersonRunDeps => ({ looot: new DemoPersonRunner(), fetch: demoSupplierFetch, env: { [EXAMPLE_HTTP_CONFIG.authEnv]: "demo" }, now, capMicros });
+/** The environment the demo supplier reads its key from. A made-up value; the fixture ignores it. */
+export const demoEnv: Record<string, string> = { [EXAMPLE_HTTP_CONFIG.authEnv]: "demo" };
+
+export const personDemoDeps = (now: Date, capMicros = 5_000_000): PersonRunDeps => ({ looot: new DemoPersonRunner(), fetch: demoSupplierFetch, env: demoEnv, now, capMicros });
 
 const HOUR = 3_600_000;
 

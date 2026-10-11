@@ -4,6 +4,7 @@
   "spendCapUsd": 1,
   "retentionDays": 30,
   "storeRawIp": false,
+  "personLevel": { "enabled": false },
   "ignorePaths": ["/api", "/_next", "/favicon.ico", "/robots.txt", "/sitemap.xml"],
   "networkNameHints": ["comcast", "verizon", "at&t", "spectrum", "charter", "vodafone", "orange", "telefonica", "deutsche telekom", "bt group", "virgin media", "t-mobile", "bouygues", "amazon", "google llc", "microsoft", "digitalocean", "ovh", "hetzner", "cloudflare", "akamai", "linode", "vultr"],
   "icp": {

@@ -20,7 +20,7 @@ export default async function SourcesPage() {
       </div>
       <section className="rounded-panel border border-line bg-panel p-4" aria-labelledby="snippet">
         <h2 id="snippet" className="font-semibold">Tracking snippet</h2>
-        <p className="mb-2 text-mute">The snippet sends the page path and the referrer origin, and only after the visitor consents. It never sends when the browser signals Global Privacy Control or Do Not Track. The server reads the IP from the request, stores it until it is resolved, then keeps a salted hash.</p>
+        <p className="mb-2 text-mute">The snippet sends the page path and the referrer origin, and only after the visitor consents. It never sends when the browser signals Global Privacy Control or Do Not Track. Person-level mode (<span className="num">data-person</span>) is described on the Person-level page and adds a first-party id only after a second consent. The server reads the IP from the request, stores it until it is resolved, then keeps a salted hash.</p>
         <pre className="num overflow-x-auto rounded-control bg-hover p-3 text-12">{SNIPPET}</pre>
         <p className="mt-2 text-12 text-mute">Collected IPs wait for a lookup on the Import page. Retention: {v.retention.days} days.</p>
       </section>

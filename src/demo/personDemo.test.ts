@@ -19,7 +19,9 @@ describe("person-level demo", () => {
     const outcomes = new Set(s.person!.audit.map((a) => a.outcome));
     for (const o of ["gpc", "dnt", "no_consent", "blocked_region", "suppressed", "identified", "no_match"]) expect(outcomes.has(o)).toBe(true);
     expect(v.pending).toBe(2);
-    expect(v.stats.perIdentificationMicros).not.toBeNull();
+    // Four supplier calls (one found no one) at $0.12 and one enrichment at $0.28, over four people.
+    expect(v.stats.spentMicros).toBe(760_000);
+    expect(v.stats.perIdentificationMicros).toBe(190_000);
   });
   it("keeps raw addresses and visitor ids out of the stored people and the audit log", async () => {
     const s = await buildDemoState(NOW);

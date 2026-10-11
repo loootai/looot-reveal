@@ -25,7 +25,7 @@ export default async function CostsPage() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-20 font-semibold">Costs</h1>
-        <p className="text-mute">Every looot call the state file remembers, what it cost, and what the next run could cost. List prices as of {PRICES_AS_OF}; the real charge is read from each run.</p>
+        <p className="text-mute">Every looot call the state file remembers, what it cost, and what the next run could cost. List prices as of {PRICES_AS_OF}; the real charge is read from each run. Rows for person.identify are calls to your own identity supplier, counted at the price in your config. They are not looot calls and are not in the total.</p>
       </div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Spent in total" value={usd(v.spentMicros)} note={`kept ${v.retention.days} days`} />

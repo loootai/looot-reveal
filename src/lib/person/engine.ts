@@ -158,7 +158,7 @@ const hashKey = (k: string): string => createHash("sha256").update(k).digest("he
 
 function whyAllowed(config: RevealConfig, country: string, how: string): string {
   const pl = config.personLevel;
-  return `${country} address on the allow-list (${pl.allowedRegions.join(", ")}), country from ${how}. No Global Privacy Control or Do Not Track. Consent signal ${pl.requireConsent ? "granted" : "not required"}. Not on the suppression list. Terms acknowledged ${pl.acknowledgedTerms}.`;
+  return `${country} is on the allow-list (${pl.allowedRegions.join(", ")}), from ${how}. No GPC or DNT. Consent ${pl.requireConsent ? "granted" : "not required"}. Not suppressed. Terms acknowledged ${pl.acknowledgedTerms}.`;
 }
 
 /**
@@ -330,7 +330,8 @@ function attachVisits(rec: PersonRecord, visits: { path: string; ts: string }[],
 function upsertPerson(state: State, config: RevealConfig, c: PersonCandidate, ctx: { vidKey: string; ipKeys: string[]; visits: { path: string; ts: string }[]; now: Date; companyDomain?: string }): PersonRecord {
   const p = ensurePerson(state);
   const id = shortId(c.emailSha256 ?? c.linkedinUrl ?? c.name ?? ctx.vidKey ?? ctx.ipKeys[0] ?? "x");
-  const rec: PersonRecord = p.people[id] ?? { id, supplier: c.supplier, costMicros: 0, firstSeen: ctx.now.toISOString(), lastSeen: ctx.now.toISOString(), vidKeys: [], ipKeys: [], visits: [] };
+  const stamps = ctx.visits.map((v) => v.ts).sort();
+  const rec: PersonRecord = p.people[id] ?? { id, supplier: c.supplier, costMicros: 0, firstSeen: stamps[0] ?? ctx.now.toISOString(), lastSeen: stamps.at(-1) ?? ctx.now.toISOString(), vidKeys: [], ipKeys: [], visits: [] };
   rec.emailSha256 = c.emailSha256 ?? rec.emailSha256;
   rec.emailMd5 = c.emailMd5 ?? (c.emailSha256 === rec.emailSha256 ? rec.emailMd5 : undefined);
   if (c.workEmail) {

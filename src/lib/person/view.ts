@@ -1,7 +1,8 @@
 import type { RevealConfig } from "../config";
 import type { State } from "../state";
 import { isPersonLevelActive } from "./gates";
-import { quotePersonRun, type PersonQuote } from "./engine";
+import { PERSON_IDENTIFY_JOB, quotePersonRun, type PersonQuote } from "./engine";
+import { PERSON_ENRICH_JOB } from "./enrich";
 import type { AuditEntry, SuppressionEntry } from "./types";
 
 export interface PersonRow {
@@ -32,7 +33,7 @@ export interface PersonStats {
   suppressed: number;
   skipped: number;
   spentMicros: number;
-  /** Spend divided by identified people that cost something. null when nothing was paid for. */
+  /** All paid person-level calls divided by identified people, so no-match calls are included. null when nothing was paid for. */
   perIdentificationMicros: number | null;
   bySupplier: { supplier: string; identified: number; costMicros: number }[];
 }
@@ -91,8 +92,8 @@ export function buildPersonView(state: State, config: RevealConfig): PersonView 
     e.costMicros += r.costMicros;
     bySupplier.set(r.supplier, e);
   }
-  const spent = people.reduce((n, r) => n + r.costMicros, 0);
-  const paid = people.filter((r) => r.costMicros > 0).length;
+  // Every paid person-level call counts, including supplier calls that found no one. That is the honest cost of an identification.
+  const spent = state.calls.filter((c) => c.job === PERSON_IDENTIFY_JOB || c.job === PERSON_ENRICH_JOB).reduce((n, c) => n + c.costMicros, 0);
   const sup = p?.suppression ?? [];
   return {
     active,
@@ -106,7 +107,7 @@ export function buildPersonView(state: State, config: RevealConfig): PersonView 
       suppressed: count("suppressed"),
       skipped: audit.filter((a) => a.kind === "skipped").length,
       spentMicros: spent,
-      perIdentificationMicros: paid > 0 ? Math.round(spent / paid) : null,
+      perIdentificationMicros: spent > 0 && people.length > 0 ? Math.round(spent / people.length) : null,
       bySupplier: [...bySupplier.values()].sort((a, b) => b.costMicros - a.costMicros),
     },
     quote: active ? quotePersonRun(state, config, capMicros) : emptyQuote(capMicros),

@@ -28,8 +28,7 @@ export default async function AuditPage() {
               <thead>
                 <tr>
                   <Th>When (UTC)</Th>
-                  <Th>Event</Th>
-                  <Th>Outcome</Th>
+                  <Th>Event and outcome</Th>
                   <Th>Supplier</Th>
                   <Th>Country</Th>
                   <Th>Why</Th>
@@ -40,11 +39,13 @@ export default async function AuditPage() {
                 {audit.map((a, i) => (
                   <tr key={`${a.at}-${i}`}>
                     <Td className="num whitespace-nowrap">{a.at.slice(0, 16).replace("T", " ")}</Td>
-                    <Td><Badge tone={TONE[a.kind]}>{a.kind.replace("_", " ")}</Badge></Td>
-                    <Td className="num">{a.outcome}</Td>
-                    <Td className="num max-w-48 truncate" title={a.supplier}>{a.supplier}</Td>
+                    <Td>
+                      <Badge tone={TONE[a.kind]}>{a.kind.replace("_", " ")}</Badge>
+                      <span className="num ml-1.5">{a.outcome}</span>
+                    </Td>
+                    <Td className="num max-w-32 truncate" title={a.supplier}>{a.supplier}</Td>
                     <Td className="num">{a.country ?? "unknown"}</Td>
-                    <Td className="min-w-72 max-w-xl whitespace-normal text-12 text-mute">{a.why}</Td>
+                    <Td className="min-w-60 max-w-sm whitespace-normal text-12 text-mute">{a.why}</Td>
                     <Td className="num text-right">{usd(a.costMicros)}</Td>
                   </tr>
                 ))}

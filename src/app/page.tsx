@@ -26,7 +26,7 @@ export default async function VisitorsPage() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-20 font-semibold">Visiting companies</h1>
-        <p className="text-mute">Company-level only. Each row is a business network that opened your site, with the pages it viewed.</p>
+        <p className="text-mute">Each row is a business network that opened your site, with the pages it viewed.</p>
       </div>
       {v.pendingIps > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-panel border border-line bg-amber-soft p-3 text-amber" role="status">

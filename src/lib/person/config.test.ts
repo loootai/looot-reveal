@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { parseConfig } from "../config";
 import { ConfigSchema, DEFAULT_CONFIG } from "../config";
 import { BLOCKED_COUNTRIES, PERSON_CONDITIONS } from "./schema";
 import { isPersonLevelActive, regionVerdict, signalVerdict } from "./gates";
@@ -24,6 +26,11 @@ describe("personLevel config", () => {
   it("turns on with a date and all conditions", () => {
     const c = ConfigSchema.parse({ personLevel: ON });
     expect(isPersonLevelActive(c)).toBe(true);
+  });
+  it("ships with person-level off in reveal.config.json", () => {
+    const c = parseConfig(readFileSync("reveal.config.json", "utf8"));
+    expect(c.personLevel.enabled).toBe(false);
+    expect(isPersonLevelActive(c)).toBe(false);
   });
   it("does not check the acknowledgement while the feature is off", () => {
     expect(() => ConfigSchema.parse({ personLevel: { enabled: false } })).not.toThrow();

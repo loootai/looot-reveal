@@ -11,9 +11,11 @@ It reads an access log, a CSV of IPs, or visits from a small tracking snippet. I
 ![Visitors feed, light](docs/screenshots/feed-light.png)
 ![Visitors feed, dark](docs/screenshots/feed-dark.png)
 
-## Company level only
+## Company level by default
 
-This app never tries to name a person behind a visit. An IP address is personal data under the GDPR and UK GDPR, and joining a visit to a named individual needs consent in most places and runs into state privacy laws in the US. Business network owners are public registry data. So the app stops at the company. See [Privacy and consent](#privacy-and-consent).
+Out of the box the app never tries to name a person behind a visit. An IP address is personal data under the GDPR and UK GDPR, and joining a visit to a named individual needs consent in most places and runs into state privacy laws in the US. Business network owners are public registry data. So the app stops at the company. See [Privacy and consent](#privacy-and-consent).
+
+An optional, US-only person-level slot exists. It is off, it ships with no supplier, and it takes a setup page with five ticked conditions to turn on. See [Person-level identification (optional, US only)](#person-level-identification-optional-us-only).
 
 ## What you need
 
@@ -81,7 +83,7 @@ npm run reveal -- --input access.log --cap 0.50
 
 Results go to `reveal-out/visitors.json`, `visitors.csv` and `visitors.md` (change the folder with `--out`). Answers already bought are cached in `data/reveal.json`, the same file the web UI reads (change it with `REVEAL_DATA` or `--state`; an old `state/reveal.json` is moved there on first run), so an IP seen again costs nothing. Run `npm run reveal -- --help` for all flags. Exit codes are 0 done, 1 run failed, 2 usage error or no token.
 
-Run it with `npm run build && npm start` (http://localhost:3000). A sidebar lists the pages: Feed (and a company page with the signals behind its ICP flag and how each address was resolved), Sources and snippet, Import and run (paste or upload, see the quote, run), Provider waterfall, ICP, Privacy and retention, Costs and Config file (the raw JSON). There is no sign-in and no Supabase, so run it behind your own access control.
+Run it with `npm run build && npm start` (http://localhost:3000). A sidebar lists the pages: Feed (and a company page with the signals behind its ICP flag and how each address was resolved), Sources and snippet, Import and run (paste or upload, see the quote, run), Provider waterfall, ICP, Person-level (optional), Privacy and retention, Costs and Config file (the raw JSON). With person-level on, a People section adds People, Suppression and opt-out, and Audit log. There is no sign-in and no Supabase, so run it behind your own access control.
 
 ## How the lookup works
 
@@ -162,6 +164,170 @@ Used now, through looot: IPinfo (`ipinfo-lite`, `ipinfo--2`) and People Data Lab
 
 To add a provider, ask looot for it: use the MCP tool `capability_request`, `POST /v1/capability-requests`, or [looot.ai/contact](https://looot.ai/contact) ([how, in the docs](https://docs.looot.ai/support)). Once looot lists an IP endpoint you can add it to `waterfall.providers`. The response parser is chosen by `adapter` (`ipinfo` or `pdl`), so a provider with a different response shape also needs a small parser in `src/lib/parse.ts`, and PRs for that are welcome. Suppliers with a public self-serve IP API that looot does not have yet, and that look worth asking for: ipgeolocation.io, Ipregistry, ipapi.is, MaxMind GeoIP2, ipdata and Abstract API. KickFire and Snitcher return real company profiles but their API access and prices are not public. Nearly all of these return the registered owner of the network, not a resolved visitor, and most bar resale in their standard terms.
 
+## Person-level identification (optional, US only)
+
+![People page with sample data](docs/screenshots/people-light.png)
+
+This is off by default, and company-level keeps working exactly the same while it is off. Nothing person-level is called, collected or stored until you turn it on. The demo shows the feature with invented people, each marked as sample data.
+
+**State plainly what this is.** looot does not supply person-level visitor identity, and no identity supplier is bundled in this repo. The feature is a slot. It identifies someone only if you bring your own email hash (your own forms and logins) or your own supplier contract. Without one of those it identifies no one.
+
+### How it differs from company-level
+
+Company-level turns an IP into the organisation that owns the network. It works for any country and needs no consent in most places. Person-level tries to name one individual behind a visit: name, job title, employer, LinkedIn URL, and a hashed email. An IP address alone cannot do that. A name needs a match against an identity graph, and that graph is data you license from a supplier, or an email your own site already holds.
+
+### How it works
+
+1. The snippet runs in person mode (`data-person="1"`). After a second, separate consent it sends a first-party random id and the page URL to your server. It makes no call to any third-party or ad-tech domain from the visitor's browser. There is no cookie sync and no ID sync.
+2. The server checks, in this order, before anything is looked up: the switch and acknowledgement, Global Privacy Control and Do Not Track, the consent signal, the country, and the suppression list. Each refusal goes in the audit log with no address in it.
+3. The country must be on the allow-list (default `US`). The EU, the other EEA states, the UK and Switzerland are blocked in code. An unknown country is refused. The country comes from a CDN header when there is one, then from the free IPinfo Lite call through looot.
+4. Identity comes from three steps, and the first to find one wins.
+   - Known visitor. Your site passes a SHA-256 of an email it already holds, from a login, a form submit or a hashed id in an email link. Later visits with the same first-party id link to that person. No third party is called.
+   - HTTP supplier. Your own identity-resolution API, configured with a URL, a key from the environment and a field mapping.
+   - looot enrichment. When only a hash is known, one looot call turns the hash into a name, title, LinkedIn URL and company. The quote is shown first and the spend cap is enforced before the call.
+5. The raw IP is deleted as soon as the attempt ends. Emails are stored as hashes. A work email the supplier returns is kept only if you set `storeWorkEmail`.
+
+### Conditions
+
+The setup page (Person-level, in the sidebar) refuses to turn the feature on until each box is ticked. The config parser enforces the same rule, so editing the file by hand does not skip it.
+
+- Your privacy notice says you identify people who visit your site, names each supplier, and says how long you keep the data.
+- Your privacy notice links to this app's opt-out page (`/optout`), and you keep it reachable on the public internet.
+- You accept that visitors whose browser sends Global Privacy Control or Do Not Track are skipped, and you will not turn that off.
+- You have a written contract with each identity supplier you connect, and it allows this use.
+- A lawyer has reviewed your use of person-level identification. We are not giving legal advice. Rules differ by state and change.
+
+### Turn it on
+
+Use the setup page, or set this in `reveal.config.json`. `enabled: true` without a date and every condition is rejected at load time.
+
+```json
+{
+  "personLevel": {
+    "enabled": true,
+    "acknowledgedTerms": "2026-10-11",
+    "acknowledgedConditions": ["privacy_notice", "opt_out_link", "honour_gpc", "supplier_contract", "legal_review"],
+    "allowedRegions": ["US"],
+    "requireConsent": true,
+    "retentionDays": 30,
+    "auditRetentionDays": 365,
+    "spendCapUsd": 1,
+    "storeWorkEmail": false,
+    "knownVisitor": { "enabled": true },
+    "http": { "enabled": false },
+    "enrich": { "enabled": false }
+  }
+}
+```
+
+Add the snippet in person mode, and call `revealIdentify` where your site learns an email.
+
+```html
+<script src="https://YOUR-HOST/reveal.js" data-person="1" defer></script>
+<script>
+  /* after the visitor accepts your banner */
+  window.revealGrant && window.revealGrant();
+  window.revealGrantPerson && window.revealGrantPerson();
+  /* on login or form submit: hashed in the browser, the email never leaves the page */
+  window.revealIdentify && window.revealIdentify("person@example.com");
+</script>
+```
+
+The snippet also reads consent from OneTrust (group `C0004`), Cookiebot (marketing) and CookieYes (advertisement), and takes a SHA-256 from the URL parameter `reveal_eh` for an email click. Add `data-person-consent="not-required"` only if your server config sets `requireConsent` to false. With Global Privacy Control or Do Not Track the snippet sends one empty signal, with no id and no path, so the audit log can record that it skipped.
+
+### The supplier adapter
+
+A supplier is anything that implements this small interface (`src/lib/person/types.ts`).
+
+```ts
+interface PersonAdapter {
+  id: string;
+  label: string;
+  priceMicros: number; // list price of one call, reserved against the cap first
+  lookup(input: PersonLookupInput, ctx: { fetch: typeof fetch; env: Record<string, string | undefined> }): Promise<{ candidates: PersonCandidate[]; failed?: string }>;
+}
+// input: ip, userAgent, visitorId, pageUrl, timestamp, emailHash? (SHA-256 the site already holds)
+// output: emailSha256?, emailMd5?, name?, workEmail?, linkedinUrl?, title?, company?, companyDomain?, confidence? (0 to 1), supplier, costMicros
+```
+
+The generic HTTP adapter implements it for any JSON API. You set the URL, the header, the environment variable that holds the key, the price, and two field maps. The field names below are invented. Use the ones in your supplier's documentation.
+
+```json
+{
+  "personLevel": {
+    "http": {
+      "enabled": true,
+      "label": "acme-ids",
+      "url": "https://api.acme-ids.example/v2/resolve",
+      "method": "POST",
+      "authHeader": "X-Api-Key",
+      "authEnv": "ACME_IDS_KEY",
+      "authPrefix": "",
+      "priceUsd": 0.12,
+      "request": {
+        "fields": { "ip": "client_ip", "userAgent": "ua", "visitorId": "visitor_id", "pageUrl": "page", "timestamp": "seen_at" },
+        "static": { "api_version": "2" }
+      },
+      "response": {
+        "matchesPath": "data.matches",
+        "fields": {
+          "emailSha256": "hashed_email.sha256", "emailMd5": "hashed_email.md5", "name": "full_name",
+          "workEmail": "business_email", "linkedinUrl": "linkedin", "title": "job_title",
+          "company": "company_name", "companyDomain": "company_domain", "confidence": "score"
+        },
+        "confidenceScale": 100
+      }
+    }
+  }
+}
+```
+
+Export the key as `ACME_IDS_KEY` on the server. It is never stored. A value you leave out of `request.fields` is not sent. Paths are dotted, for example `hashed_email.sha256`. The URL must be `https` (plain `http` only for localhost). A call that fails is counted at $0. A call that the supplier answers is counted at `priceUsd`, match or not, because your contract decides what is billed and the app assumes the worst case.
+
+### Enrichment through looot
+
+I read the live looot catalog on 2026-10-11 (free reads only, no paid call). These endpoints take an email or a hashed email.
+
+| Endpoint | Takes | Price per match | Used here |
+| --- | --- | --- | --- |
+| `people-data-labs-person-enrich` | `email`, `email_hash`, name, company, profile URL, `min_likelihood` | $0.28 | Yes, by default |
+| `people-data-labs-person-identify` | `email`, `email_hash`, loose name, company, location fields | $0.28 | No |
+| `aviato-person-email-hash` | a person's LinkedIn URL or id, returns SHA-256 hashed personal emails | $0.02 | No, wrong direction |
+
+People Data Labs person enrich exposes the `email_hash` parameter in the public catalog entry, so the app sends only the hash: `{ "email_hash": "<sha256>", "min_likelihood": 6 }`. All three entries are marked unverified in the catalog, and I made no paid call, so the response parser (`parsePdlPerson`) is built from People Data Labs' documented person body and from fixtures, not from a recorded response. Turn it on with `personLevel.enrich.enabled`. The People page quotes the worst case before a run, and the run stops before any call that would pass `spendCapUsd`.
+
+### Controls
+
+| Control | What it does | Where it is enforced |
+| --- | --- | --- |
+| Off by default | `enabled` is false. The config refuses `true` without a date and all five conditions. | `src/lib/person/schema.ts` |
+| US-only gate | A lookup runs only for a country on `allowedRegions` (default `US`). EU, EEA, UK and CH are blocked even in a hand-edited file. Unknown is refused. | `src/lib/person/gates.ts` |
+| Global Privacy Control, Do Not Track | Read from the `Sec-GPC` and `DNT` headers and from the snippet. The attempt is skipped and the skip is logged. | `gates.ts`, `/api/collect` |
+| Consent gate | With `requireConsent`, no lookup until the snippet reports a consent signal. | `gates.ts`, `public/reveal.js` |
+| Suppression list | Emails (stored as SHA-256 and MD5), hashes and domains. Import from the UI or `reveal person suppress`. Matches are dropped before storage. | `src/lib/person/store.ts` |
+| Public opt-out | `/optout` page and `POST /api/optout` add the hashes to the list and delete stored data. Works even when the feature is off. | `src/app/api/optout` |
+| Retention | People, links and queued addresses are deleted after `retentionDays`. Audit rows after `auditRetentionDays`. Runs hourly on collect and on each run. | `store.ts` |
+| Delete by email | `npm run reveal -- person delete --email person@example.com [--suppress]`, or the Suppression page. | `src/headless/person.ts` |
+| Audit log | One row per lookup and per refusal: when, supplier, why allowed, cost. No names, emails, addresses or visitor ids. | `store.ts`, Audit page |
+| Hashes, not emails | SHA-256 and MD5 only. The raw address is deleted when the attempt ends. | `engine.ts` |
+| Spend cap | Every paid call is reserved against `spendCapUsd` first. | `engine.ts`, `waterfall.ts` |
+
+The People page shows cost per identification, and the Costs page lists the calls under `person.identify` and `person.enrich`.
+
+### Sample privacy-notice paragraph
+
+Edit this with your lawyer. It is a starting point, not advice.
+
+> Identifying visitors to our website. If you visit our site from the United States, we may try to work out who you are, using an email address we already hold for you (for example from a form you filled in or an email we sent you) or data from an identity supplier we have a contract with, [supplier name]. We then store your name, job title, employer and a hashed form of your email address for up to [30] days, and we use it to decide whether to contact you about our services. We do not do this if your browser sends a Global Privacy Control or Do Not Track signal, if you have not agreed on our cookie banner, or if you visit from the EU, the EEA, the UK or Switzerland. To opt out and have what we hold about you deleted, use [your reveal host]/optout or write to [contact address].
+
+### How products that sell this do it, at a high level
+
+Services that sell person-level visitor identity generally run a script on your page. For US visitors it asks identity networks, from the visitor's browser, whether they know a hashed email for that browser. It sends those hashes and the page URL to the vendor's server. There the vendor matches the hash to a profile in its own licensed database and returns a name, a LinkedIn URL and often a work email. The vendor owns the data and the contracts. This repo does not copy that method. It makes no browser-side calls to identity networks, and everything runs on your server, from your own emails or your own supplier.
+
+### Not legal advice
+
+We do not give legal advice. Person-level identification is regulated by state privacy laws in the US and by the GDPR and UK GDPR elsewhere, and a regulator or a plaintiff can read this feature differently from how we do. Get a lawyer's review before you use it.
+
 ## Privacy and consent
 
 - An IP is personal data in the EU and UK. Use a consent banner before the snippet sends anything. The snippet waits for `window.revealGrant()`, and sends nothing when the browser signals Global Privacy Control or Do Not Track.
@@ -170,6 +336,7 @@ To add a provider, ask looot for it: use the MCP tool `capability_request`, `POS
 - `retentionDays` (default 30) deletes visits and stored answers past the window on each CLI run and from Settings.
 - Consumer ISP, mobile, hosting and VPN addresses are excluded from the feed.
 - Name looot and IPinfo as processors in your privacy policy. This is not legal advice.
+- Person-level data, if you turn it on, has its own retention, suppression and audit controls. See [Person-level identification](#person-level-identification-optional-us-only).
 
 ## Troubleshooting
 
@@ -190,7 +357,7 @@ How to file an issue. Open one at https://github.com/loootai/looot-reveal/issues
 
 ## Status
 
-Dropped on purpose: person-level identification, email finding, and a hosted multi-user mode.
+Dropped on purpose: email finding and a hosted multi-user mode. Person-level identification is an optional, US-only slot that ships off and with no supplier.
 
 - No paid looot run was made. Parsing of the IPinfo and company answers is built from IPinfo's public field list and from fixtures, not from recorded paid responses. Which fields the `ipinfo--2` plan returns (company, ASN type, privacy flags) depends on the IPinfo tier behind looot. When only the ASN name is present, the app falls back to the `networkNameHints` list in the config to spot ISPs, and that list is a heuristic.
 - The `company.enrich` job answer is read by looking for common field names. Providers differ, so a missing field shows as "unknown".

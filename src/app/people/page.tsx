@@ -77,11 +77,11 @@ export default async function PeoplePage() {
                 {pv.people.map((p) => (
                   <tr key={p.id} className="hover:bg-hover">
                     <Td className="h-12">
-                      <span className="flex items-center gap-1.5 font-medium">
+                      <span className="flex items-center gap-1.5 whitespace-nowrap font-medium">
                         {p.name}
                         {v.demo && <Badge tone="amber">Sample</Badge>}
                       </span>
-                      <span className="text-12 text-mute">{p.title ?? "Title not returned"}</span>
+                      <span className="whitespace-nowrap text-12 text-mute">{p.title ?? "Title not returned"}</span>
                       {p.linkedinUrl && (
                         <a href={href(p.linkedinUrl)} target="_blank" rel="noreferrer noopener" className="ml-2 inline-flex items-center gap-0.5 text-12 text-link hover:underline">
                           LinkedIn <ExternalLink className="size-3" />
@@ -96,9 +96,9 @@ export default async function PeoplePage() {
                       )}
                       {p.companyDomain && <span className="num block text-12 text-mute">{p.companyDomain}</span>}
                     </Td>
-                    <Td className="num max-w-56 truncate" title={p.supplier}>{p.supplier}</Td>
+                    <Td className="num max-w-36 truncate" title={p.supplier}>{p.supplier}</Td>
                     <Td className="num text-right">{p.confidence === undefined ? "n/a" : `${Math.round(p.confidence * 100)}%`}</Td>
-                    <Td className="num max-w-56 truncate" title={p.pages.map((g) => `${g.path} x${g.views}`).join(", ")}>{p.pages.slice(0, 3).map((g) => g.path).join(", ") || "none"}</Td>
+                    <Td className="num max-w-40 truncate" title={p.pages.map((g) => `${g.path} x${g.views}`).join(", ")}>{p.pages.slice(0, 3).map((g) => g.path).join(", ") || "none"}</Td>
                     <Td className="whitespace-nowrap">{ago(p.lastSeen, v.now)}</Td>
                     <Td className="num text-right">{usd(p.costMicros)}</Td>
                   </tr>

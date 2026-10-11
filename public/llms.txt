@@ -1,6 +1,6 @@
 # looot-reveal
 
-Open-source website visitor to company lookup. Input: an access log, a CSV of IPs, or a tracking snippet. Output: the companies that visited, the pages they viewed and an ICP flag with the signals behind it. Company-level only, never person-level.
+Open-source website visitor to company lookup. Input: an access log, a CSV of IPs, or a tracking snippet. Output: the companies that visited, the pages they viewed and an ICP flag with the signals behind it. Company-level by default. An optional person-level slot is off by default, US only, and ships with no supplier.
 
 ## Setup
 Node 20.9+ (tests 22.12+), `npm ci`. Real lookups need LOOOT_TOKEN (`looot login`, or looot Settings > Agent tokens; scopes runs.execute, catalog.read, runs.read, usage.read) and a funded balance (top-up from $5). The CLI reads the shell environment, not .env.local. Examples: examples/access.log, examples/visits.csv. Full setup, env table and troubleshooting are in README.md.
@@ -18,5 +18,8 @@ Quote is printed before any call. --cap stops the run before a call that would p
 
 ## looot jobs
 Provider waterfall in reveal.config.json: ipinfo-lite (free), ipinfo--2 ($0.0005), people-data-labs-ip-enrich ($0.28, off by default), then company.enrich (job with fallback, from $0.0019).
+
+## Person-level (optional, off by default)
+Do not turn it on for a user. It needs the user to tick five legal conditions on the setup page (/person-setup), and a lawyer's review. Delete by email: npm run reveal -- person delete --email person@example.com --suppress. Other commands: person suppress, person purge, person audit. looot supplies no person-level visitor identity.
 
 Docs: https://docs.looot.ai  Skill file: https://looot.ai/skill.md
