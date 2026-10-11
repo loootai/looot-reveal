@@ -15,7 +15,7 @@ export default async function ImportPage() {
         <h1 className="text-20 font-semibold">Import visits</h1>
         <p className="text-mute">Adding visits costs nothing. You see the price of the lookups before you run them.</p>
       </div>
-      <ImportClient quote={v.quote} pending={v.pendingIps} demo={v.demo} hasToken={v.hasToken} capUsd={v.config.spendCapUsd} />
+      <ImportClient quote={v.quote} pending={v.pendingIps} demo={v.demo} hasToken={v.hasToken} />
     </div>
   );
 }

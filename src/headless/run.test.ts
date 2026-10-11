@@ -37,6 +37,16 @@ describe("runCli", () => {
     expect(existsSync(join(t.dir, "out"))).toBe(false);
     expect(existsSync(join(t.dir, "state.json"))).toBe(false);
   });
+  it("refuses a run whose quote is above the period budget, and --partial runs until it is reached", async () => {
+    const t = setup();
+    const deps = { ...t.deps, env: { LOOOT_REVEAL_DAILY_USD: "0.0006", LOOOT_REVEAL_MONTHLY_USD: "0.0006" } };
+    expect(await runCli(t.args(), deps)).toBe(2);
+    expect(t.looot.runAndWait).not.toHaveBeenCalled();
+    expect(t.err.join("\n")).toContain("above what is left of the period budget");
+    expect(await runCli(t.args("--partial"), deps)).toBe(0);
+    expect(t.out.join("\n")).toContain("Stopped by the period budget");
+    expect((t.looot.runAndWait as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBeLessThanOrEqual(1);
+  });
   it("runs, writes json, csv and markdown, and a second run costs nothing", async () => {
     const t = setup();
     expect(await runCli(t.args(), t.deps)).toBe(0);

@@ -1,6 +1,6 @@
 {
   "name": "looot-reveal",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Open-source website visitor to company lookup. IP address in, company out, with an ICP flag. Next.js and looot.",
   "license": "MIT",
   "private": true,

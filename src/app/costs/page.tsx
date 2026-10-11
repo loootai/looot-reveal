@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { requireAdminPage } from "@/lib/auth/guard";
+import { BudgetForm } from "@/components/BudgetForm";
+import { BudgetPanel } from "@/components/BudgetPanel";
 import { Table, Td, Th } from "@/components/ui/misc";
-import { getView } from "@/lib/app";
+import { budgetStatus, getView } from "@/lib/app";
 import { ago } from "@/lib/format";
-import { usd, usdPrecise } from "@/lib/money";
+import { MICROS, usd, usdPrecise } from "@/lib/money";
 import { PRICES_AS_OF } from "@/lib/sources";
 
 export const metadata: Metadata = { title: "Costs" };
@@ -21,14 +23,16 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
 
 export default async function CostsPage() {
   await requireAdminPage();
-  const v = await getView();
+  const [v, status] = await Promise.all([getView(), budgetStatus()]);
   const { byProvider, recent } = v.costs;
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-20 font-semibold">Costs</h1>
-        <p className="text-mute">Every looot call the state file remembers, what it cost, and what the next run could cost. List prices as of {PRICES_AS_OF}; the real charge is read from each run. Rows for person.identify are calls to your own identity supplier, counted at the price in your config. They are not looot calls and are not in the total.</p>
+        <p className="text-mute">Every looot call the state file remembers, what it cost, and what the next run could cost. Every paid call is held to the cap per run (set in your config file), then to a daily and a monthly budget. Each looot call reserves its list price first and settles to the real cost. List prices as of {PRICES_AS_OF}; the real charge is read from each run. Rows for person.identify are calls to your own identity supplier, counted at the price in your config. They are not looot calls and are not in the total.</p>
       </div>
+      <BudgetPanel status={status} />
+      <BudgetForm key={`${status.limits.dailyMicros}:${status.limits.monthlyMicros}`} dailyUsd={status.limits.dailyMicros / MICROS} monthlyUsd={status.limits.monthlyMicros / MICROS} disabled={v.demo} />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Spent in total" value={usd(v.spentMicros)} note={`kept ${v.retention.days} days`} />
         <Stat label="Spend cap per run" value={usd(v.quote.capMicros)} />

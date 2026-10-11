@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { Budget, budgetFile, defaultLimits } from "@/lib/budget";
 import type { RevealConfig } from "@/lib/config";
 import { buildFeed } from "@/lib/feed";
 import type { LogFormat } from "@/lib/ingest";
@@ -21,11 +22,14 @@ export const HELP = `Usage: npm run reveal -- --input <access.log|visits.csv> [o
   --out <dir>        Where visitors.json, visitors.csv and visitors.md go. Default: reveal-out
   --state <file>     Answers already bought, so repeat IPs are free. Default: REVEAL_DATA, else data/reveal.json (the web UI reads the same file)
   --cap <usd>        Spend cap for this run. Default: the config's spendCapUsd
+  --partial          Run until the cap or the period budget even when the quote is above what is left
   --dry-run          Print the list-price cost and make no call. Writes nothing.
 
   Person-level data (optional): npm run reveal -- person --help
 
 Needs LOOOT_TOKEN in the environment, except with --dry-run.
+Period budget: LOOOT_REVEAL_DAILY_USD (default 10) and LOOOT_REVEAL_MONTHLY_USD (default 50) set the starting limits.
+The owner changes them on the Costs page of the web UI. They live in budget.json next to the state file.
 Exit codes: 0 done, 1 run failed, 2 usage error.`;
 
 export interface CliDeps {
@@ -43,7 +47,7 @@ export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
   const now = deps.now ?? new Date();
   let a;
   try {
-    a = parseArgs({ args: argv, options: { input: { type: "string" }, format: { type: "string", default: "auto" }, config: { type: "string" }, out: { type: "string", default: "reveal-out" }, state: { type: "string" }, cap: { type: "string" }, "dry-run": { type: "boolean", default: false }, help: { type: "boolean", default: false } } }).values;
+    a = parseArgs({ args: argv, options: { input: { type: "string" }, format: { type: "string", default: "auto" }, config: { type: "string" }, out: { type: "string", default: "reveal-out" }, state: { type: "string" }, cap: { type: "string" }, partial: { type: "boolean", default: false }, "dry-run": { type: "boolean", default: false }, help: { type: "boolean", default: false } } }).values;
   } catch (e) {
     deps.err(`${(e as Error).message}\n\n${HELP}`);
     return 2;
@@ -89,8 +93,18 @@ export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
     }
   }
 
+  // Order of checks: quote, cap per run, period budget, then the calls. Runs that ended since last time settle first.
+  const budget = new Budget(budgetFile(statePath), defaultLimits(deps.env));
+  if ("getRun" in looot) await budget.reconcile(looot as unknown as { getRun(id: string): Promise<import("@/lib/looot").LoootRun> }, now);
+  const room = await budget.status(now);
+  deps.out(`Budget left: ${usd(room.remainingMicros)} (${usd(room.day.remainingMicros)} today, ${usd(room.month.remainingMicros)} this month, ${usd(room.day.reservedMicros)} reserved).`);
+  if (Math.min(quote.maxMicros, capMicros) > room.remainingMicros && !a.partial) {
+    deps.err("Refused: the quote is above what is left of the period budget. Wait for the period to roll over, raise the budget on the Costs page of the web UI, or pass --partial to run until it is reached.");
+    return 2;
+  }
+
   const purged = purgeOld(state, config, now);
-  const result = await resolvePending(state, config, looot, capMicros, now);
+  const result = await resolvePending(state, config, looot, capMicros, now, budget);
   saveState(statePath, state);
 
   const feed = buildFeed(state.visits, state.resolutions, state.companies, config);
@@ -103,6 +117,7 @@ export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
 
   deps.out(`Made ${result.calls.length} calls, spent ${usd(result.spentMicros)} this run (${usd(spent)} in total in the state file).`);
   if (result.notRun.ips.length + result.notRun.domains.length > 0) deps.out(`Stopped at the ${usd(capMicros)} cap: ${result.notRun.ips.length} IPs and ${result.notRun.domains.length} domains were not run. Run again with a higher --cap.`);
+  if (result.budgetMessage) deps.out(`Stopped by the period budget. ${result.budgetMessage}`);
   const pending = Object.keys(state.pendingIps).length;
   if (pending > 0) deps.out(`${pending} IPs are pending (still running or not run). Run the same command again to collect them. Pending runs are never charged twice.`);
   if (purged.visits > 0) deps.out(`Retention: removed ${purged.visits} visits older than ${config.retentionDays} days.`);

@@ -101,7 +101,7 @@ Each new IP goes down an ordered list of providers set in `reveal.config.json` u
 4. If two providers name different companies, the feed shows both and marks the row low confidence. `waterfall.crossCheck` asks a second company-level provider after every confident match so mismatches show up.
 5. Each answer is cached per IP for `waterfall.cacheDays` days (30 by default). The feed and the company page show which provider answered each address and what it cost.
 
-Before a run the quote prices the worst case for the whole waterfall: every enabled provider called for every new IP, plus enrichment. The spend cap is checked before every call, including calls running in parallel.
+Before a run the quote prices the worst case for the whole waterfall: every enabled provider called for every new IP, plus enrichment. The cap per run and the period budget are both checked before every call, including calls running in parallel.
 
 ## Spending
 
@@ -118,12 +118,21 @@ Prices read from the public catalog on 2026-10-10. Example at list price with th
 
 Money rules
 
+Four limits stand between a request and a charge, checked in this order: the quote, the cap per run, the period budget, then the call.
+
 - The quote shows before any paid action, and the UI button shows the amount it will spend.
-- `--cap` (or `spendCapUsd` in the config) stops the run before a call that would pass it. A provider that would pass the cap is never started; free ones still run.
-- Each call sends a stable idempotency key per input and job (`reveal:ip.lookup:<provider>:<ip>`), so a retry never pays twice.
+- The cap per run is `spendCapUsd` in `reveal.config.json` (1 dollar by default), and `personLevel.spendCapUsd` for person-level runs. It comes from the server's config and nothing else. The admin changes it on the Provider waterfall page or in the file, with the session and the CSRF token. A `capUsd` or any budget field in a run request is ignored: the run routes do not read the body. `--cap` on the CLI overrides it for one run on your own machine. The cap stops the run before a call that would pass it. A provider that would pass the cap is never started; free ones still run.
+- The period budget caps all runs together: a daily and a monthly amount (UTC), $10 and $50 until you change them. The owner changes them on the Costs page, or sets the starting values with `LOOOT_REVEAL_DAILY_USD` and `LOOOT_REVEAL_MONTHLY_USD`. A run is refused up front when the smaller of the quote and the cap is above what is left. The CLI does the same unless you pass `--partial`, which runs until the cap or the budget is reached.
+- Before each looot call the app reserves its list price in `budget.json` (next to the state file), under a lock file, and refuses the call if used plus reserved plus the price would pass the daily or the monthly budget. Runs started together cannot both pass. When the call ends the reservation becomes the real charge. A call that looot answered with an error releases it. A call still running at looot (`pending`) keeps its reservation: it is never counted as $0 and the budget is not handed back early. A network error leaves the reservation in place, because the request may have been accepted. The next run looks up every pending call with `GET /v1/runs/{id}` and settles the ones that ended. A reservation that cannot be looked up is released after 24 hours.
+- `budget.json` holds hashes of idempotency keys, never an IP address or an email hash. It keeps no answers, so it adds no personal data. Answers stay in the state file under your retention settings.
+- Your own person-level supplier (the HTTP adapter) is not a looot call. It counts against the cap per run and not against the period budget.
+- The sidebar and the Costs page show used, reserved and remaining for today and this month. At the budget the run is refused with a message that names the limit.
+- Each call sends a stable idempotency key per input and job (`reveal:ip.lookup:<provider>:<ip>`), so a retry never pays twice. The key has no date. A stored answer inside `waterfall.cacheDays` is not looked up again. Past that window the address is looked up again as a new request with its own key, `...:p<n>` where `n` is the number of whole cache periods since 1970. Asking again in the same period sends the same key, and looot replays it with no second charge. The budget also remembers each settled key for the month and does not count a replay twice.
 - A run still in progress when waiting stops is stored as pending. The next run collects it with the same key. It is never treated as failed at $0.
-- The default cap is `spendCapUsd` in `reveal.config.json`, 1 dollar. `--cap` overrides it for one CLI run.
 - A failed call is not charged.
+- The looot token balance is the final limit. Fund a dedicated token with only what you are willing to spend, and keep the budget below it.
+
+The budget lives in a file, so run one instance on a disk that persists. Several instances, or a serverless host with a throwaway disk, do not share it.
 
 ## Deploy
 
@@ -138,6 +147,7 @@ Things to know first.
 
 - Without `REVEAL_ADMIN_PASSWORD` the app serves no admin route. It shows the setup page at `/login` and nothing else. Set the password before you put the URL anywhere.
 - The tracking snippet must reach `/api/collect` from your public site, so a host-level protection that blocks anonymous traffic (for example Vercel Deployment Protection on the whole site) also blocks the snippet. Use the app's own sign-in, or put only the admin paths behind your proxy.
+- The period budget is a file, `budget.json`, next to `REVEAL_DATA`. Run one instance on a persistent disk. Two instances each keep their own copy and can together spend twice the budget.
 - State and config are files. `REVEAL_DATA` (default `data/reveal.json`) and `reveal.config.json` are written by the app, and a serverless function may not be able to write them. Point `REVEAL_DATA` and `REVEAL_CONFIG` at writable paths. On Vercel that is `/tmp`, which does not persist between invocations, so collected visits would be lost. For a tracking snippet in production use a host with a persistent disk.
 - `/api/collect` accepts a visit only from an origin in `allowedOrigins`, at most 60 per minute per address, with a body under 2 KB. Collecting costs nothing. Looking up costs money and runs only from an admin session or the CLI.
 - Rate limits and lockout counters live in memory in one process. Behind several instances, rate limit at your proxy too.
@@ -167,7 +177,7 @@ Pages and routes were listed from `src/app` and classified. A test reads the fol
 | Public by design | 7 routes | `/api/collect` (the snippet posts here), `/optout` and `/api/optout`, `/api/health`, `/login`, `/api/auth/login`, `/api/auth/logout` |
 | Public static files | 4 | `/reveal.js` (the snippet), `/llms.txt`, `/favicon.ico`, `/brand/*` |
 | Admin pages | 13 | `/` (feed), `/company/[domain]`, `/people`, `/suppression`, `/audit`, `/costs`, `/icp`, `/import`, `/person-setup`, `/privacy`, `/settings`, `/sources`, `/waterfall` |
-| Admin API | 7 | `/api/import`, `/api/resolve` (paid looot run), `/api/person/run` (paid looot run), `/api/person/delete`, `/api/person/suppression`, `/api/purge`, `/api/settings` (config, caps, waterfall, person-level) |
+| Admin API | 8 | `/api/budget` (read, and change the period budget), `/api/import`, `/api/resolve` (paid looot run), `/api/person/run` (paid looot run), `/api/person/delete`, `/api/person/suppression`, `/api/purge`, `/api/settings` (config, caps, waterfall, person-level) |
 
 There are no server actions and no export routes. Any path not listed is treated as admin.
 
@@ -181,6 +191,7 @@ There are no server actions and no export routes. Any path not listed is treated
 - Set up: a valid session is required. Page requests without one redirect to `/login`. API requests get 401.
 - Sign-in: constant-time password comparison. A session is a signed token in an httpOnly, SameSite=Lax cookie, Secure in production, valid for 8 hours. 5 wrong passwords from one address lock that address for 15 minutes. 40 wrong passwords from anywhere lock sign-in for everyone for 15 minutes (a brute-force guard that also lets an attacker delay you, so use a long password and an IP allow-list too).
 - State-changing admin requests need a same-origin `Origin` header and the per-session token in `x-reveal-csrf`. The layout puts the token in a meta tag and the app's own fetch calls send it.
+- The period budget (`PUT /api/budget`) is changed only by the signed-in owner, with the CSRF token. A run cannot raise it, and the run routes ignore the request body, so a caller cannot set the cap either. See [Spending](#spending). The looot token balance is the final limit, so give the app a token funded with only what you are willing to spend.
 - Admin responses carry `Cache-Control: no-store`. All responses carry a Content-Security-Policy (`frame-ancestors 'none'`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. The CSP allows inline scripts because Next.js needs them.
 - The password and token never reach the client bundle. The server reads them at runtime.
 
@@ -374,6 +385,7 @@ People Data Labs person enrich exposes the `email_hash` parameter in the public 
 | Audit log | One row per lookup and per refusal: when, supplier, why allowed, cost. No names, emails, addresses or visitor ids. | `store.ts`, Audit page |
 | Hashes, not emails | SHA-256 and MD5 only. The raw address is deleted when the attempt ends. | `engine.ts` |
 | Spend cap | Every paid call is reserved against `spendCapUsd` first. | `engine.ts`, `waterfall.ts` |
+| Period budget | Every looot call reserves its list price in `budget.json`, then settles. | `budget.ts`, `paidCall.ts` |
 
 The People page shows cost per identification, and the Costs page lists the calls under `person.identify` and `person.enrich`.
 
@@ -411,6 +423,7 @@ Messages are quoted from the code.
 | `LOOOT_TOKEN is not set on the server.` | The web UI has no token. | Put it in `.env.local` and restart, or add it in Vercel. |
 | `Every call failed.` (exit 1), or visitors listed with reason `lookup_failed` | Every looot call failed. This is how a 401 (bad token or missing scope) or a 402 (balance too low) shows up here, because the run does not stop on them and does not print looot's message. | Check the token has the four scopes and the balance is funded (https://docs.looot.ai/money). Failed calls are not charged. Run again, answers already bought are kept. |
 | `Stopped at the $X cap: N IPs and M domains were not run. Run again with a higher --cap.` | The cap was reached. | Raise `--cap` if you want the rest. |
+| `Refused: the quote is above what is left of the period budget.` / `Stopped by the period budget.` | The daily or monthly budget is used up or reserved. | Wait for the period to roll over, raise the budget on the Costs page, or pass `--partial`. |
 | `N IPs are pending (still running or not run). Run the same command again to collect them. Pending runs are never charged twice.` | A call had not finished, or the cap stopped it. Not a failure. | Run the same command again. |
 | Companies show "unknown" fields | The provider answer did not have the field, or the parser did not recognise its name. | See "How to file an issue". |
 | `--input is required.` / `No file at <path>` / `Unknown --format <f>` / `--cap must be a number of dollars.` | Usage errors. Exit code 2. | Fix the flag. |

@@ -4,12 +4,12 @@ import { runPerson } from "@/lib/app";
 
 export const runtime = "nodejs";
 
+/** Admin, paid. The request body is not read: the cap and the budget come from server config. */
 export async function POST(req: Request) {
   const denied = await requireAdminRoute(req);
   if (denied) return denied;
-  const body = (await req.json().catch(() => ({}))) as { capUsd?: number };
   try {
-    return NextResponse.json(await runPerson(typeof body.capUsd === "number" ? body.capUsd : undefined));
+    return NextResponse.json(await runPerson());
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }

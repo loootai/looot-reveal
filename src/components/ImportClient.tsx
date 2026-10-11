@@ -18,7 +18,7 @@ async function post<T>(url: string, body: unknown): Promise<T> {
   return json;
 }
 
-export function ImportClient({ quote, pending, demo, hasToken, capUsd }: { quote: Quote; pending: number; demo: boolean; hasToken: boolean; capUsd: number }) {
+export function ImportClient({ quote, pending, demo, hasToken }: { quote: Quote; pending: number; demo: boolean; hasToken: boolean }) {
   const router = useRouter();
   const [text, setText] = React.useState("");
   const [format, setFormat] = React.useState("auto");
@@ -103,8 +103,8 @@ export function ImportClient({ quote, pending, demo, hasToken, capUsd }: { quote
             </p>
             {!canRun && <p className="text-12 text-high">LOOOT_TOKEN is not set on the server, so the run is disabled. Use the CLI with --dry-run to see the cost.</p>}
             <Button variant="primary" disabled={busy || !canRun} onClick={() => act(async () => {
-              const r = await post<{ spentMicros: number; calls: number; notRun: number; pending: number }>("/api/resolve", { capUsd });
-              return `Made ${r.calls} calls and spent ${usd(r.spentMicros)}.${r.notRun > 0 ? ` Stopped at the cap with ${r.notRun} not run.` : ""}${r.pending > 0 ? ` ${r.pending} still pending.` : ""}`;
+              const r = await post<{ spentMicros: number; calls: number; notRun: number; pending: number; budgetMessage?: string | null }>("/api/resolve", {});
+              return `Made ${r.calls} calls and spent ${usd(r.spentMicros)}.${r.notRun > 0 ? ` Stopped with ${r.notRun} not run.` : ""}${r.budgetMessage ? ` ${r.budgetMessage}` : ""}${r.pending > 0 ? ` ${r.pending} still pending.` : ""}`;
             })}>
               Run for up to {usd(Math.min(quote.maxMicros, quote.capMicros))}
             </Button>

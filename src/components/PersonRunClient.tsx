@@ -8,7 +8,7 @@ import type { PersonQuote } from "@/lib/person/engine";
 import { adminFetch } from "./adminFetch";
 
 /** Quote first, then a run that cannot pass the cap. */
-export function PersonRunClient({ quote, demo, hasToken, needsLooot, capUsd }: { quote: PersonQuote; demo: boolean; hasToken: boolean; needsLooot: boolean; capUsd: number }) {
+export function PersonRunClient({ quote, demo, hasToken, needsLooot }: { quote: PersonQuote; demo: boolean; hasToken: boolean; needsLooot: boolean }) {
   const router = useRouter();
   const [msg, setMsg] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -18,10 +18,10 @@ export function PersonRunClient({ quote, demo, hasToken, needsLooot, capUsd }: {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await adminFetch("/api/person/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ capUsd }) });
-      const r = (await res.json()) as { error?: string; spentMicros: number; identified: number; skipped: number; noMatch: number; failed: number; notRun: number; pending: number };
+      const res = await adminFetch("/api/person/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const r = (await res.json()) as { error?: string; spentMicros: number; identified: number; skipped: number; noMatch: number; failed: number; notRun: number; pending: number; budgetMessage?: string };
       if (!res.ok) throw new Error(r.error ?? `HTTP ${res.status}`);
-      setMsg(`Identified ${r.identified}, no match ${r.noMatch}, refused by a check ${r.skipped}, failed ${r.failed}. Spent ${usd(r.spentMicros)}.${r.notRun > 0 ? ` Stopped at the cap with ${r.notRun} not run.` : ""}${r.pending > 0 ? ` ${r.pending} still queued.` : ""}`);
+      setMsg(`Identified ${r.identified}, no match ${r.noMatch}, refused by a check ${r.skipped}, failed ${r.failed}. Spent ${usd(r.spentMicros)}.${r.notRun > 0 ? ` Stopped with ${r.notRun} not run.` : ""}${r.budgetMessage ? ` ${r.budgetMessage}` : ""}${r.pending > 0 ? ` ${r.pending} still queued.` : ""}`);
       router.refresh();
     } catch (e) {
       setMsg((e as Error).message);

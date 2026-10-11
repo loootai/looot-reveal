@@ -2,9 +2,10 @@ import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
-import type { ShellNavSection } from "@/components/AppShell";
+import type { ShellNavSection, ShellSpend, ShellSpendRow } from "@/components/AppShell";
 import { ShellGate } from "@/components/ShellGate";
-import { getView } from "@/lib/app";
+import { budgetStatus, getView } from "@/lib/app";
+import type { PeriodStatus } from "@/lib/budget";
 import { currentCsrf, requireAdminPage } from "@/lib/auth/guard";
 import { isPublicPath } from "@/lib/auth/routes";
 import { usd } from "@/lib/money";
@@ -77,7 +78,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const gate = await requireAdminPage();
   const csrf = await currentCsrf();
   const v = await getView();
-  const cap = Math.round(v.config.spendCapUsd * 1_000_000);
+  const b = await budgetStatus();
+  const row = (label: string, p: PeriodStatus): ShellSpendRow => ({ label, used: usd(p.usedMicros), reserved: usd(p.reservedMicros), remaining: usd(p.remainingMicros), cap: usd(p.limitMicros), ratio: p.limitMicros > 0 ? (p.usedMicros + p.reservedMicros) / p.limitMicros : 0 });
+  const spend: ShellSpend = { title: "Spend budget", rows: [row("Today", b.day), row("Month", b.month)], note: b.remainingMicros <= 0 ? "Budget reached. Paid runs are refused." : undefined };
   const nav = v.person.active ? [BASE_NAV[0], PEOPLE_NAV, ...BASE_NAV.slice(1)] : BASE_NAV;
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
@@ -92,7 +95,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           githubHref="https://github.com/loootai/looot-reveal"
           demoLabel={gate.policy.mode === "open-demo" ? "Demo, no sign-in" : v.demo ? "Demo data" : undefined}
           signOut={gate.policy.mode === "login"}
-          spend={{ label: `Spent in total, ${usd(cap)} cap per run`, spent: usd(v.spentMicros) }}
+          spend={spend}
           primaryAction={{ href: "/import", label: "Import visits" }}
         >
           <div className="mx-auto max-w-6xl px-4 py-6 md:px-6">{children}</div>

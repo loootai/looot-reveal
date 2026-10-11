@@ -30,6 +30,7 @@ export const ROUTES: Record<string, RouteKind> = {
   "/api/health": "public",
   "/api/auth/login": "public",
   "/api/auth/logout": "public",
+  "/api/budget": "admin",
   "/api/import": "admin",
   "/api/person/delete": "admin",
   "/api/person/run": "admin",

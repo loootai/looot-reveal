@@ -56,7 +56,7 @@ export default async function PeoplePage() {
         <Stat label="Lookups tried" value={String(s.lookups)} note={`${s.noMatch} no match, ${s.failed} failed, ${s.suppressed} suppressed`} />
         <Stat label="Refused by a check" value={String(s.skipped)} note="GPC, DNT, consent, region" />
       </div>
-      <PersonRunClient quote={pv.quote} demo={v.demo} hasToken={v.hasToken} needsLooot={v.config.personLevel.enrich.enabled} capUsd={v.config.personLevel.spendCapUsd} />
+      <PersonRunClient quote={pv.quote} demo={v.demo} hasToken={v.hasToken} needsLooot={v.config.personLevel.enrich.enabled} />
       <section aria-labelledby="ppl" className="rounded-panel border border-line bg-panel">
         <h2 id="ppl" className="border-b border-line p-3 font-semibold">Identified people</h2>
         {pv.people.length === 0 ? (

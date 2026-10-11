@@ -1,7 +1,9 @@
 import type { ProviderConfig, RevealConfig } from "./config";
 import { inCidr, isNonPublicIp } from "./ip";
-import { LoootError, type LoootRun, type LoootRunner } from "./looot";
+import type { Ledger } from "./budget";
+import type { LoootRun, LoootRunner } from "./looot";
 import { toMicros } from "./money";
+import { paidCall } from "./paidCall";
 import { parseIpInfo, parsePdlIp } from "./parse";
 import type { AnswerOutcome, Confidence, ExcludeReason, IpInfo, ProviderAnswer, Resolution } from "./types";
 
@@ -10,6 +12,15 @@ const PENDING = new Set(["queued", "running", "reconciliation_pending", "pending
 /** Stable per (provider, IP): the same IP always maps to the same key, so a retry never pays twice. */
 export function lookupKey(providerId: string, ip: string, salt = ""): string {
   return `reveal:ip.lookup:${providerId}:${ip}${salt}`;
+}
+
+/**
+ * Key suffix for a lookup that replaces an answer past the cache window. It names the cache period
+ * (floor of time over cacheDays), not a date, so the same refresh asked twice in one period carries one key
+ * and looot replays it without a second charge. The next period gets a new key, which is the fresh lookup.
+ */
+export function refreshSalt(now: Date, cacheDays: number): string {
+  return `:p${Math.floor(now.getTime() / (Math.max(1, cacheDays) * 86_400_000))}`;
 }
 
 /** The providers that will be called, in order. Disabled ones are skipped. */
@@ -84,21 +95,14 @@ export class Budget {
   }
 }
 
-async function call(looot: LoootRunner, endpointId: string, input: Record<string, unknown>, key: string): Promise<LoootRun> {
-  try {
-    return await looot.runAndWait(endpointId, input, key, { fallback: false });
-  } catch (e) {
-    const err = e instanceof LoootError ? e : null;
-    return { runId: "", status: "failed", error: { code: err?.code ?? "request_failed", message: (e as Error).message } };
-  }
-}
-
 export interface WalkResult {
   resolution: Resolution;
   /** Cost of every call made, per provider, for the call log. */
   calls: { providerId: string; endpointId: string; key: string; costMicros: number; status: string }[];
-  /** true when the cap stopped the walk before a conclusion, so the address stays pending. */
+  /** true when the cap or the period budget stopped the walk before a conclusion, so the address stays pending. */
   capStopped: boolean;
+  /** The refusal text when the period budget (not the run cap) stopped the walk. */
+  budgetMessage?: string;
 }
 
 /**
@@ -106,9 +110,10 @@ export interface WalkResult {
  * verdict (nothing more is spent), and at the first confident company match unless crossCheck asks
  * for a second opinion. Never makes a call the budget cannot cover.
  */
-export async function walkProviders(ip: string, config: RevealConfig, looot: LoootRunner, budget: Budget, now: Date, keySalt = ""): Promise<WalkResult> {
+export async function walkProviders(ip: string, config: RevealConfig, looot: LoootRunner, budget: Budget, now: Date, keySalt = "", ledger?: Ledger): Promise<WalkResult> {
   const nowIso = now.toISOString();
-  const done = (r: Omit<Resolution, "resolvedAt">, calls: WalkResult["calls"], capStopped = false): WalkResult => ({ resolution: { ...r, resolvedAt: nowIso }, calls, capStopped });
+  let budgetMessage: string | undefined;
+  const done = (r: Omit<Resolution, "resolvedAt">, calls: WalkResult["calls"], capStopped = false): WalkResult => ({ resolution: { ...r, resolvedAt: nowIso }, calls, capStopped, ...(budgetMessage ? { budgetMessage } : {}) });
   if (isNonPublicIp(ip)) return done({ status: "excluded", reason: "private_ip", costMicros: 0 }, []);
   if (config.waterfall.skipCidrs.some((c) => inCidr(ip, c))) return done({ status: "excluded", reason: "skipped_range", costMicros: 0 }, []);
 
@@ -132,7 +137,15 @@ export async function walkProviders(ip: string, config: RevealConfig, looot: Loo
       break;
     }
     const key = lookupKey(p.id, ip, keySalt);
-    const run = await call(looot, p.endpointId, { ip }, key);
+    // Order of checks: the run cap above, then the period budget, then the call.
+    const paid = await paidCall({ looot, ledger, endpointId: p.endpointId, input: { ip }, key, priceMicros: price, now, fallback: false });
+    if (paid.refused !== null) {
+      budget.settle(price, 0);
+      budgetMessage = paid.refused;
+      capStopped = true;
+      break;
+    }
+    const run = paid.run;
     const { answer, info } = toAnswer(p, ip, run, config);
     budget.settle(price, answer.costMicros);
     answers.push(answer);

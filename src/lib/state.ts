@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { RevealConfig } from "./config";
 import { buildQuote, type Quote } from "./quote";
 import { resolveIps, type CompanyEntry, type EngineOutput } from "./engine";
+import type { Ledger } from "./budget";
 import type { LoootRunner } from "./looot";
 import { isFresh } from "./waterfall";
 import type { PersonState } from "./person/types";
@@ -56,14 +57,14 @@ export function quotePending(state: State, config: RevealConfig, capMicros: numb
 }
 
 /** Resolves the pending IPs and writes the answers back. Raw IPs are dropped once an IP has a final answer. */
-export async function resolvePending(state: State, config: RevealConfig, looot: LoootRunner, capMicros: number, now: Date): Promise<EngineOutput> {
+export async function resolvePending(state: State, config: RevealConfig, looot: LoootRunner, capMicros: number, now: Date, ledger?: Ledger): Promise<EngineOutput> {
   const byIp: Record<string, string> = {};
   const cache: Record<string, Resolution> = {};
   for (const [key, ip] of Object.entries(state.pendingIps)) {
     byIp[ip] = key;
     if (state.resolutions[key]) cache[ip] = state.resolutions[key];
   }
-  const out = await resolveIps({ ips: Object.keys(byIp), looot, config, cache, companies: state.companies, capMicros, now });
+  const out = await resolveIps({ ips: Object.keys(byIp), looot, config, cache, companies: state.companies, capMicros, ledger, now });
   for (const [ip, res] of Object.entries(out.resolutions)) {
     const key = byIp[ip];
     if (!key) continue;

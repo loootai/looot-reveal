@@ -4,11 +4,12 @@ import { buildDemoState, DEMO_CONFIG } from "@/demo/seed";
 import { demoEnv, demoSupplierFetch, DemoPersonRunner } from "@/demo/personDemo";
 import { ConfigSchema, type RevealConfig } from "./config";
 import { assertPersonLevelAuth, personLevelAllowed } from "./auth/policy";
+import { Budget, budgetFile, type BudgetStatus } from "./budget";
 import { buildFeed, type Feed } from "./feed";
 import { addVisits, purgeOld, quotePending, resolvePending, type State } from "./state";
-import { hasLoootToken, loootFromEnv, type LoootRunner } from "./looot";
+import { hasLoootToken, loootFromEnv, type LoootClient, type LoootRunner } from "./looot";
 import { parseVisits, type LogFormat } from "./ingest";
-import { toMicros } from "./money";
+import { toMicros, usd } from "./money";
 import type { Quote } from "./quote";
 import { isPersonLevelActive } from "./person/gates";
 import { PERSON_IDENTIFY_JOB, queuePersonVisit, runPersonLookups, type VisitSignals } from "./person/engine";
@@ -26,6 +27,33 @@ const statePath = () => {
   return p;
 };
 const configPath = () => resolve(/* turbopackIgnore: true */ process.env.REVEAL_CONFIG ?? "reveal.config.json");
+
+/** The period budget file, next to the state file. Demo mode only reads it. */
+export function getBudget(): Budget {
+  return new Budget(budgetFile(statePath()));
+}
+
+/** Used, reserved and remaining for today and this month. Free. */
+export async function budgetStatus(now: Date = new Date()): Promise<BudgetStatus> {
+  return getBudget().status(now);
+}
+
+/** Owner only (the route checks the session and the CSRF token). Saves the daily and monthly budget in dollars. */
+export async function setBudget(input: { dailyUsd: unknown; monthlyUsd: unknown }): Promise<BudgetStatus> {
+  if (isDemo()) throw new Error("Demo mode has no budget to change.");
+  const b = getBudget();
+  await b.setLimits({ dailyMicros: toMicros(Number(input.dailyUsd)), monthlyMicros: toMicros(Number(input.monthlyUsd)) });
+  return b.status();
+}
+
+/** Settles the calls that ended since the last run and returns what is left. Free: it only reads runs. */
+async function roomFor(budget: Budget, looot: LoootRunner): Promise<BudgetStatus> {
+  if ("getRun" in looot) await budget.reconcile(looot as LoootClient);
+  return budget.status();
+}
+
+const refusal = (what: string, need: number, room: BudgetStatus): Error =>
+  new Error(`The ${what} (${usd(need)}) is above what is left of the budget (${usd(room.remainingMicros)}: ${usd(room.day.remainingMicros)} today, ${usd(room.month.remainingMicros)} this month, ${usd(room.day.reservedMicros)} reserved). Raise the budget on the Costs page, or wait for the period to roll over.`);
 
 const g = globalThis as unknown as { __revealDemo?: Promise<{ state: State; config: RevealConfig }> };
 
@@ -140,13 +168,21 @@ export async function recordBrowserSignal(reason: "gpc" | "dnt") {
   save();
 }
 
-/** Paid. Runs the queued person-level visitors, stopping before a call that would pass the cap. */
-export async function runPerson(capUsd: number | undefined) {
+/** Paid. Runs the queued person-level visitors. The cap is the server's personLevel.spendCapUsd, never a request value. */
+export async function runPerson() {
   const { state, config, looot, save } = await open();
   if (!isPersonLevelActive(config)) throw new Error("Person-level identification is off.");
-  const cap = toMicros(capUsd ?? config.personLevel.spendCapUsd);
+  const cap = toMicros(config.personLevel.spendCapUsd);
   const demoMode = isDemo();
-  const out = await runPersonLookups(state, config, { looot, fetch: demoMode ? demoSupplierFetch : fetch, env: demoMode ? demoEnv : process.env, now: new Date(), capMicros: cap });
+  // Order of checks: quote, cap per run (inside the run), period budget (each looot call reserves), then the call.
+  const budget = demoMode ? undefined : getBudget();
+  if (budget && looot) {
+    const room = await roomFor(budget, looot);
+    const enrich = config.personLevel.enrich;
+    const price = toMicros(enrich.priceUsd);
+    if (enrich.enabled && (state.person?.pending.length ?? 0) > 0 && price > room.remainingMicros) throw refusal("enrichment price", price, room);
+  }
+  const out = await runPersonLookups(state, config, { looot, fetch: demoMode ? demoSupplierFetch : fetch, env: demoMode ? demoEnv : process.env, now: new Date(), capMicros: cap, ledger: budget });
   save();
   return { ...out, pending: state.person?.pending.length ?? 0 };
 }
@@ -183,14 +219,22 @@ export async function dropSuppression(kind: SuppressionEntry["kind"], value: str
   return ok;
 }
 
-/** Paid. Resolves the pending IPs, stopping before a call that would pass the cap. */
-export async function runResolve(capUsd: number | undefined) {
+/** Paid. Resolves the pending IPs. The cap is the server's spendCapUsd, never a request value. */
+export async function runResolve() {
   const { state, config, looot, save } = await open();
   if (!looot) throw new Error("LOOOT_TOKEN is not set on the server.");
-  const cap = toMicros(capUsd ?? config.spendCapUsd);
-  const out = await resolvePending(state, config, looot, cap, new Date());
+  const cap = toMicros(config.spendCapUsd);
+  // Order of checks: quote, cap per run, period budget, then the calls (each reserves its list price first).
+  const budget = isDemo() ? undefined : getBudget();
+  if (budget) {
+    const room = await roomFor(budget, looot);
+    const quote = quotePending(state, config, cap, new Date());
+    const need = Math.min(quote.maxMicros, cap);
+    if (need > room.remainingMicros) throw refusal("quote", need, room);
+  }
+  const out = await resolvePending(state, config, looot, cap, new Date(), budget);
   save();
-  return { spentMicros: out.spentMicros, calls: out.calls.length, notRun: out.notRun.ips.length + out.notRun.domains.length, pending: Object.keys(state.pendingIps).length };
+  return { spentMicros: out.spentMicros, calls: out.calls.length, notRun: out.notRun.ips.length + out.notRun.domains.length, pending: Object.keys(state.pendingIps).length, budgetMessage: out.budgetMessage };
 }
 
 export async function purge() {

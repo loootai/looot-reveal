@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
+import type { Ledger } from "../budget";
 import type { RevealConfig } from "../config";
 import type { LoootRunner } from "../looot";
 import { toMicros } from "../money";
+import { paidCall } from "../paidCall";
 import { parseIpInfo } from "../parse";
 import { ipKeyOf, type State } from "../state";
 import { Budget } from "../waterfall";
@@ -141,7 +143,10 @@ export interface PersonRunDeps {
   fetch: typeof fetch;
   env: Record<string, string | undefined>;
   now: Date;
+  /** Spend cap for this run. Always from server config, never from a request. */
   capMicros: number;
+  /** Period budget for looot calls. Your own supplier's calls are not in it. Left out in demo mode and in tests. */
+  ledger?: Ledger;
 }
 
 export interface PersonRunResult {
@@ -150,8 +155,10 @@ export interface PersonRunResult {
   skipped: number;
   noMatch: number;
   failed: number;
-  /** Visitors left queued because the next paid call would pass the cap. */
+  /** Visitors left queued because the next paid call would pass the cap or the period budget. */
   notRun: number;
+  /** The refusal text when the period budget stopped a call. */
+  budgetMessage?: string;
 }
 
 const hashKey = (k: string): string => createHash("sha256").update(k).digest("hex").slice(0, 12);
@@ -189,15 +196,13 @@ export async function runPersonLookups(state: State, config: RevealConfig, deps:
     let country = items.find((i) => i.country)?.country ?? state.resolutions[lead.ipKey]?.info?.country;
     let how = items.find((i) => i.country) ? "a CDN header" : "the stored company lookup";
     if (!country && deps.looot) {
-      try {
-        const run = await deps.looot.runAndWait("ipinfo-lite", { ip: lead.ip }, `reveal:person.geo:${lead.ipKey}`, { fallback: false });
-        const cost = toMicros(run.actualCost);
+      const geo = await paidCall({ looot: deps.looot, ledger: deps.ledger, endpointId: "ipinfo-lite", input: { ip: lead.ip }, key: `reveal:person.geo:${lead.ipKey}`, priceMicros: 0, now: deps.now, fallback: false });
+      if (geo.refused === null) {
+        const cost = toMicros(geo.run.actualCost);
         budget.settle(0, cost);
-        addCall("person.geo", "ipinfo-lite", `geo:${lead.ipKey}`, cost, run.status);
-        if (run.status === "completed") country = parseIpInfo(lead.ip, run.result).country;
+        addCall("person.geo", "ipinfo-lite", `geo:${lead.ipKey}`, cost, geo.run.status);
+        if (geo.run.status === "completed") country = parseIpInfo(lead.ip, geo.run.result).country;
         how = "IPinfo Lite";
-      } catch {
-        country = undefined;
       }
     }
     const rv = regionVerdict(country, config);
@@ -274,12 +279,16 @@ export async function runPersonLookups(state: State, config: RevealConfig, deps:
         continue;
       }
       const key = enrichKey(pl.enrich.endpointId, best.emailSha256);
-      let run;
-      try {
-        run = await deps.looot.runAndWait(pl.enrich.endpointId, enrichInput(best.emailSha256, pl.enrich), key, { fallback: false });
-      } catch (e) {
-        run = { runId: "", status: "failed", error: { code: "request_failed", message: (e as Error).message } };
+      const paid = await paidCall({ looot: deps.looot, ledger: deps.ledger, endpointId: pl.enrich.endpointId, input: enrichInput(best.emailSha256, pl.enrich), key, priceMicros: price, now: deps.now, fallback: false });
+      if (paid.refused !== null) {
+        budget.settle(price, 0);
+        addAudit(state, { at, kind: "lookup", supplier: pl.enrich.endpointId, outcome: "cap_reached", why: "The period budget would be passed by the enrichment call. The visitor stays queued.", subject: lead.ipKey, costMicros: 0, country: cc });
+        result.notRun++;
+        result.budgetMessage = paid.refused;
+        result.spentMicros += groupCost;
+        continue;
       }
+      const run = paid.run;
       const got = candidateFromRun(run);
       budget.settle(price, got.costMicros);
       groupCost += got.costMicros;
