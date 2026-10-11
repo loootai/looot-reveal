@@ -2,6 +2,9 @@ import { ConfigSchema, DEFAULT_CONFIG, DEFAULT_PROVIDERS, type RevealConfig } fr
 import { addVisits, emptyState, resolvePending, type State } from "@/lib/state";
 import type { Visit } from "@/lib/types";
 import { DemoRunner } from "./fixtureRunner";
+import { seedDemoPeople } from "./personDemo";
+import { EXAMPLE_HTTP_CONFIG } from "@/lib/person/notice";
+import { PERSON_CONDITIONS } from "@/lib/person/schema";
 
 const HOUR = 3_600_000;
 
@@ -43,7 +46,18 @@ function demoVisits(now: Date): Visit[] {
 }
 
 /** The demo turns People Data Labs on so the feed shows a third provider and one disagreement. Nothing is saved from the demo. */
-export const DEMO_CONFIG: RevealConfig = ConfigSchema.parse({ ...DEFAULT_CONFIG, waterfall: { ...DEFAULT_CONFIG.waterfall, providers: DEFAULT_PROVIDERS.map((p) => ({ ...p, enabled: true })) } });
+export const DEMO_CONFIG: RevealConfig = ConfigSchema.parse({
+  ...DEFAULT_CONFIG,
+  waterfall: { ...DEFAULT_CONFIG.waterfall, providers: DEFAULT_PROVIDERS.map((p) => ({ ...p, enabled: true })) },
+  // Person-level is on in the demo, with invented people only. The page says so. A real install starts with it off.
+  personLevel: {
+    enabled: true,
+    acknowledgedTerms: "2026-10-11",
+    acknowledgedConditions: PERSON_CONDITIONS.map((c) => c.id),
+    http: { ...EXAMPLE_HTTP_CONFIG, label: "sample-supplier", url: "https://identity-supplier.example/v1/resolve" },
+    enrich: { enabled: true },
+  },
+});
 
 /** Builds the demo state by running the real engine over made-up visits and a fixture runner. */
 export async function buildDemoState(now: Date = new Date(), config: RevealConfig = DEMO_CONFIG): Promise<State> {
@@ -54,6 +68,7 @@ export async function buildDemoState(now: Date = new Date(), config: RevealConfi
   // Three fresh IPs are left unresolved so the Import page has a quote to show and a run to try.
   const at = (m: number) => new Date(now.getTime() - m * 60_000).toISOString();
   addVisits(state, [{ ip: "203.0.113.80", path: "/pricing", ts: at(20) }, { ip: "203.0.113.70", path: "/", ts: at(15) }, { ip: "198.51.100.40", path: "/features", ts: at(5) }], config, now);
+  await seedDemoPeople(state, config, now);
   return state;
 }
 

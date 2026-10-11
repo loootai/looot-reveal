@@ -197,3 +197,12 @@ export function purgePerson(state: HasPerson, config: RevealConfig, now: Date): 
 }
 
 export type { PersonRecord };
+
+/** Removes one entry from the suppression list. */
+export function removeSuppression(state: HasPerson, kind: SuppressionEntry["kind"], value: string): boolean {
+  const p = state.person;
+  if (!p) return false;
+  const before = p.suppression.length;
+  p.suppression = p.suppression.filter((e) => !(e.kind === kind && e.value === value));
+  return p.suppression.length < before;
+}

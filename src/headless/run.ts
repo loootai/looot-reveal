@@ -10,6 +10,7 @@ import { toMicros, usd } from "@/lib/money";
 import { addVisits, purgeOld, quotePending, resolvePending } from "@/lib/state";
 import { loadConfig, loadState, migrateLegacyState, saveState, statePathFromEnv } from "@/lib/store";
 import { PRICES_AS_OF } from "@/lib/sources";
+import { runPersonCli } from "./person";
 import { renderCsv, renderMarkdown, renderQuote } from "./render";
 
 export const HELP = `Usage: npm run reveal -- --input <access.log|visits.csv> [options]
@@ -21,6 +22,8 @@ export const HELP = `Usage: npm run reveal -- --input <access.log|visits.csv> [o
   --state <file>     Answers already bought, so repeat IPs are free. Default: REVEAL_DATA, else data/reveal.json (the web UI reads the same file)
   --cap <usd>        Spend cap for this run. Default: the config's spendCapUsd
   --dry-run          Print the list-price cost and make no call. Writes nothing.
+
+  Person-level data (optional): npm run reveal -- person --help
 
 Needs LOOOT_TOKEN in the environment, except with --dry-run.
 Exit codes: 0 done, 1 run failed, 2 usage error.`;
@@ -36,6 +39,7 @@ export interface CliDeps {
 
 /** Runs the headless command. Returns the exit code. */
 export async function runCli(argv: string[], deps: CliDeps): Promise<number> {
+  if (argv[0] === "person") return runPersonCli(argv.slice(1), deps);
   const now = deps.now ?? new Date();
   let a;
   try {
