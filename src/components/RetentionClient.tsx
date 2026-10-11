@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
 import { saveConfig } from "@/components/saveConfig";
 import type { RevealConfig } from "@/lib/config";
+import { adminFetch } from "./adminFetch";
 
 export function RetentionClient({ config, demo }: { config: RevealConfig; demo: boolean }) {
   const router = useRouter();
@@ -23,7 +24,7 @@ export function RetentionClient({ config, demo }: { config: RevealConfig; demo: 
   };
   const purge = async () => {
     setBusy(true);
-    const r = (await (await fetch("/api/purge", { method: "POST" })).json()) as { visits: number; resolutions: number };
+    const r = (await (await adminFetch("/api/purge", { method: "POST" })).json()) as { visits: number; resolutions: number };
     setMsg({ ok: true, text: `Removed ${r.visits} visits and ${r.resolutions} stored answers past the retention window.` });
     setBusy(false);
     router.refresh();

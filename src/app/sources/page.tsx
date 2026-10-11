@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { requireAdminPage } from "@/lib/auth/guard";
 import Link from "next/link";
 import { buttonClass } from "@/components/ui/button";
 import { getView } from "@/lib/app";
@@ -11,6 +12,7 @@ const SNIPPET = `<script src="https://YOUR-HOST/reveal.js" defer></script>
 <script>window.revealGrant && window.revealGrant();</script>`;
 
 export default async function SourcesPage() {
+  await requireAdminPage();
   const v = await getView();
   return (
     <div className="flex flex-col gap-4">
@@ -20,7 +22,7 @@ export default async function SourcesPage() {
       </div>
       <section className="rounded-panel border border-line bg-panel p-4" aria-labelledby="snippet">
         <h2 id="snippet" className="font-semibold">Tracking snippet</h2>
-        <p className="mb-2 text-mute">The snippet sends the page path and the referrer origin, and only after the visitor consents. It never sends when the browser signals Global Privacy Control or Do Not Track. Person-level mode (<span className="num">data-person</span>) is described on the Person-level page and adds a first-party id only after a second consent. The server reads the IP from the request, stores it until it is resolved, then keeps a salted hash.</p>
+        <p className="mb-2 text-mute">The snippet sends the page path and the referrer origin, and only after the visitor consents. It never sends when the browser signals Global Privacy Control or Do Not Track. Person-level mode (<span className="num">data-person</span>) is described on the Person-level page and adds a first-party id only after a second consent. The server reads the IP from the request, stores it until it is resolved, then keeps a salted hash. The collect route answers only sites listed in <span className="num">allowedOrigins</span> in the config file, so add your site there before you install the snippet.</p>
         <pre className="num overflow-x-auto rounded-control bg-hover p-3 text-12">{SNIPPET}</pre>
         <p className="mt-2 text-12 text-mute">Collected IPs wait for a lookup on the Import page. Retention: {v.retention.days} days.</p>
       </section>

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { adminFetch } from "./adminFetch";
 
 export function SettingsClient({ configJson, demo }: { configJson: string; demo: boolean }) {
   const router = useRouter();
@@ -13,7 +14,7 @@ export function SettingsClient({ configJson, demo }: { configJson: string; demo:
   const save = async () => {
     setBusy(true);
     try {
-      const res = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: text });
+      const res = await adminFetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: text });
       const json = (await res.json()) as { error?: string };
       setMsg(res.ok ? { ok: true, text: "Saved to reveal.config.json." } : { ok: false, text: json.error ?? "Could not save." });
       if (res.ok) router.refresh();
@@ -25,7 +26,7 @@ export function SettingsClient({ configJson, demo }: { configJson: string; demo:
   };
   const purge = async () => {
     setBusy(true);
-    const res = await fetch("/api/purge", { method: "POST" });
+    const res = await adminFetch("/api/purge", { method: "POST" });
     const r = (await res.json()) as { visits: number; resolutions: number };
     setMsg({ ok: true, text: `Removed ${r.visits} visits and ${r.resolutions} stored answers past the retention window.` });
     setBusy(false);

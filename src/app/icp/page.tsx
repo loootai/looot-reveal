@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { requireAdminPage } from "@/lib/auth/guard";
 import { IcpClient } from "@/components/IcpClient";
 import { getView } from "@/lib/app";
 
@@ -6,6 +7,7 @@ export const metadata: Metadata = { title: "ICP" };
 export const dynamic = "force-dynamic";
 
 export default async function IcpPage() {
+  await requireAdminPage();
   const v = await getView();
   const matched = v.feed.companies.filter((c) => c.icp.matched).length;
   return (

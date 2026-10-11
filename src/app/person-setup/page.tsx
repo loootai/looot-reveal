@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { requireAdminPage } from "@/lib/auth/guard";
 import Link from "next/link";
 import { PersonSetupClient } from "@/components/PersonSetupClient";
 import { SampleBanner } from "@/components/SampleBanner";
@@ -8,6 +9,7 @@ export const metadata: Metadata = { title: "Person-level setup" };
 export const dynamic = "force-dynamic";
 
 export default async function PersonSetupPage() {
+  await requireAdminPage();
   const v = await getView();
   return (
     <div className="flex flex-col gap-4">

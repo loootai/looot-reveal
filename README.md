@@ -8,6 +8,8 @@ An open-source alternative to [RB2B](https://www.rb2b.com/pricing) and Clearbit 
 
 It reads an access log, a CSV of IPs, or visits from a small tracking snippet. It looks each IP up through looot's IP intelligence provider, drops ISPs, hosting and VPNs, enriches the company that is left, and shows a feed of visiting companies with the pages they viewed and an ICP match flag.
 
+> **Security notice.** Versions 0.2.0 and older had no admin sign-in. Anyone who could reach a deployed instance could read visitors, change settings, start paid looot runs and edit the suppression list. If you run v0.2.0 or older on a reachable host, upgrade to v0.2.1 and set `REVEAL_ADMIN_PASSWORD`. See [Securing a deployment](#securing-a-deployment).
+
 ![Visitors feed, light](docs/screenshots/feed-light.png)
 ![Visitors feed, dark](docs/screenshots/feed-dark.png)
 
@@ -25,7 +27,7 @@ An optional, US-only person-level slot exists. It is off, it ships with no suppl
 - The token needs the scopes `runs.execute`, `catalog.read`, `runs.read` and `usage.read`.
 - A funded balance. The minimum top-up is $5 and signing up adds no credit ([money docs](https://docs.looot.ai/money)).
 
-No other account is used. There is no Supabase, no database and no LLM key. The IP lookup runs through looot.
+No other account is used. There is no Supabase, no database and no LLM key. Admin sign-in is one password you set in the environment. The IP lookup runs through looot.
 
 ## Try it in one minute
 
@@ -35,7 +37,7 @@ npm ci
 npm run demo
 ```
 
-Open http://localhost:3520. The demo shows made-up companies on RFC 5737 addresses, needs no token, makes no looot call and costs nothing. Its data lives in memory and resets on restart. Stop it with Ctrl+C.
+Open http://localhost:3520. The demo has no sign-in and shows a "Demo, no sign-in" badge. It refuses to start if `LOOOT_TOKEN` is set or a data file exists, unless you also set an admin password. The demo shows made-up companies on RFC 5737 addresses, needs no token, makes no looot call and costs nothing. Its data lives in memory and resets on restart. Stop it with Ctrl+C.
 
 ## Run it with your own data
 
@@ -53,6 +55,10 @@ cp .env.example .env.local     # web UI only
 | `LOOOT_API_URL` | Optional | Overrides the API base. Default `https://api.looot.ai`. | Leave unset |
 | `REVEAL_DATA` | Optional | State file shared by the web UI and the CLI. Default `data/reveal.json`. | Any writable path |
 | `REVEAL_CONFIG` | Optional | Web UI config file. Default `reveal.config.json`. | Copy `reveal.config.json` |
+| `REVEAL_ADMIN_PASSWORD` | Required outside the demo | Admin password, 12 characters or more. Without it the admin pages and admin API are closed and `/login` shows a setup page. | Choose one |
+| `REVEAL_ADMIN_PASSWORD_HASH` | Alternative | `scrypt$salt$key` instead of the plain password. Wins if both are set. | `npm run hash-password -- 'your password'` |
+| `REVEAL_SESSION_SECRET` | Optional | Key that signs session cookies. Default: derived from the password, so changing the password signs everyone out. | `openssl rand -hex 32` |
+| `REVEAL_COOKIE_SECURE` | Optional | Set `0` to drop the Secure flag in production, only for plain-http testing. | Leave unset |
 | `NEXT_PUBLIC_DEMO` | Optional | `1` runs the web UI on sample data. `npm run demo` sets it. | Leave unset for real data |
 
 Quote first. A dry run needs no token and makes no network call, it also writes nothing. This is the real output:
@@ -83,7 +89,7 @@ npm run reveal -- --input access.log --cap 0.50
 
 Results go to `reveal-out/visitors.json`, `visitors.csv` and `visitors.md` (change the folder with `--out`). Answers already bought are cached in `data/reveal.json`, the same file the web UI reads (change it with `REVEAL_DATA` or `--state`; an old `state/reveal.json` is moved there on first run), so an IP seen again costs nothing. Run `npm run reveal -- --help` for all flags. Exit codes are 0 done, 1 run failed, 2 usage error or no token.
 
-Run it with `npm run build && npm start` (http://localhost:3000). A sidebar lists the pages: Feed (and a company page with the signals behind its ICP flag and how each address was resolved), Sources and snippet, Import and run (paste or upload, see the quote, run), Provider waterfall, ICP, Person-level (optional), Privacy and retention, Costs and Config file (the raw JSON). With person-level on, a People section adds People, Suppression and opt-out, and Audit log. There is no sign-in and no Supabase, so run it behind your own access control.
+Run it with `npm run build && npm start` (http://localhost:3000). A sidebar lists the pages: Feed (and a company page with the signals behind its ICP flag and how each address was resolved), Sources and snippet, Import and run (paste or upload, see the quote, run), Provider waterfall, ICP, Person-level (optional), Privacy and retention, Costs and Config file (the raw JSON). With person-level on, a People section adds People, Suppression and opt-out, and Audit log. Every one of these pages needs the admin password (see [Securing a deployment](#securing-a-deployment)). There is no Supabase and no user database. Set `allowedOrigins` in `reveal.config.json` before you install the snippet.
 
 ## How the lookup works
 
@@ -125,14 +131,17 @@ I have not deployed this to Vercel. The steps below follow the code.
 
 1. Push a copy of the repo to your own GitHub account.
 2. In Vercel choose Add New > Project, import the repo. Next.js is detected, there is no `vercel.json`.
-3. Add the environment variable `LOOOT_TOKEN`. Add `REVEAL_DATA` and `REVEAL_CONFIG` too (see below).
-4. Deploy.
+3. Add the environment variables `LOOOT_TOKEN` and `REVEAL_ADMIN_PASSWORD` (or `REVEAL_ADMIN_PASSWORD_HASH`). Add `REVEAL_DATA` and `REVEAL_CONFIG` too (see below).
+4. Deploy, then open `/login`.
 
 Things to know first.
 
-- The app has no sign-in. Anyone who can open the URL can start a lookup run from Import or the Visitors page, up to the cap. Turn on Vercel Deployment Protection, or keep it on your own machine. The tracking snippet must reach `/api/collect` from your public site, so a protected deployment cannot collect visits from it.
+- Without `REVEAL_ADMIN_PASSWORD` the app serves no admin route. It shows the setup page at `/login` and nothing else. Set the password before you put the URL anywhere.
+- The tracking snippet must reach `/api/collect` from your public site, so a host-level protection that blocks anonymous traffic (for example Vercel Deployment Protection on the whole site) also blocks the snippet. Use the app's own sign-in, or put only the admin paths behind your proxy.
 - State and config are files. `REVEAL_DATA` (default `data/reveal.json`) and `reveal.config.json` are written by the app, and a serverless function may not be able to write them. Point `REVEAL_DATA` and `REVEAL_CONFIG` at writable paths. On Vercel that is `/tmp`, which does not persist between invocations, so collected visits would be lost. For a tracking snippet in production use a host with a persistent disk.
-- `/api/collect` is open to any origin and has no rate limit. It stores a visit only when the body says the visitor consented. Collecting costs nothing. Looking up costs money and runs only when you click Run or run the CLI.
+- `/api/collect` accepts a visit only from an origin in `allowedOrigins`, at most 60 per minute per address, with a body under 2 KB. Collecting costs nothing. Looking up costs money and runs only from an admin session or the CLI.
+- Rate limits and lockout counters live in memory in one process. Behind several instances, rate limit at your proxy too.
+- Serve the app over HTTPS. In production the session cookie is Secure and will not stick over plain http.
 
 There is no scheduled workflow in this repo.
 
@@ -143,7 +152,61 @@ There is no scheduled workflow in this repo.
 <script>/* after the visitor accepts your banner */ window.revealGrant && window.revealGrant();</script>
 ```
 
-Replace `YOUR-HOST` with the host where this app runs. The script posts to `/api/collect` on the host it was loaded from, or to the URL in a `data-endpoint` attribute. Consent can also be set by writing `granted` to `localStorage` key `reveal-consent`. It sends the page path and the referrer origin. The server reads the IP from `x-forwarded-for` and stores it only until it is resolved. Collecting costs nothing. Looking up costs money and happens only when you click Run or run the CLI.
+Replace `YOUR-HOST` with the host where this app runs, and list your site in `allowedOrigins` in `reveal.config.json` (for example `["https://www.example.com"]`). The server compares the browser's `Origin` header to that list and answers 403 to everything else, including an empty list. The script posts to `/api/collect` on the host it was loaded from, or to the URL in a `data-endpoint` attribute. Consent can also be set by writing `granted` to `localStorage` key `reveal-consent`. It sends the page path and the referrer origin. The server reads the IP from `x-forwarded-for` and stores it only until it is resolved. Collecting costs nothing. Looking up costs money and happens only when you click Run or run the CLI.
+
+## Securing a deployment
+
+Versions 0.2.0 and older had no admin authentication. From 0.2.1 every route is either public on purpose or admin, and the admin routes are closed unless you set a password.
+
+### Route map
+
+Pages and routes were listed from `src/app` and classified. A test reads the folder and fails if a route is missing from `src/lib/auth/routes.ts` or if an admin route does not call the gate.
+
+| Class | Count | Routes |
+| --- | --- | --- |
+| Public by design | 7 routes | `/api/collect` (the snippet posts here), `/optout` and `/api/optout`, `/api/health`, `/login`, `/api/auth/login`, `/api/auth/logout` |
+| Public static files | 4 | `/reveal.js` (the snippet), `/llms.txt`, `/favicon.ico`, `/brand/*` |
+| Admin pages | 13 | `/` (feed), `/company/[domain]`, `/people`, `/suppression`, `/audit`, `/costs`, `/icp`, `/import`, `/person-setup`, `/privacy`, `/settings`, `/sources`, `/waterfall` |
+| Admin API | 7 | `/api/import`, `/api/resolve` (paid looot run), `/api/person/run` (paid looot run), `/api/person/delete`, `/api/person/suppression`, `/api/purge`, `/api/settings` (config, caps, waterfall, person-level) |
+
+There are no server actions and no export routes. Any path not listed is treated as admin.
+
+![Sign-in page](docs/screenshots/login-light.png)
+![Setup page shown when no password is set](docs/screenshots/setup-light.png)
+
+### How the gate works
+
+- `src/proxy.ts` checks every request. Each admin page, the root layout and each admin route handler checks again with the same function, so a path the matcher misses is still closed.
+- Not set up (no password, and not a clean demo): admin routes answer 503, admin pages redirect to `/login`, which says what to set. Nothing stored is rendered.
+- Set up: a valid session is required. Page requests without one redirect to `/login`. API requests get 401.
+- Sign-in: constant-time password comparison. A session is a signed token in an httpOnly, SameSite=Lax cookie, Secure in production, valid for 8 hours. 5 wrong passwords from one address lock that address for 15 minutes. 40 wrong passwords from anywhere lock sign-in for everyone for 15 minutes (a brute-force guard that also lets an attacker delay you, so use a long password and an IP allow-list too).
+- State-changing admin requests need a same-origin `Origin` header and the per-session token in `x-reveal-csrf`. The layout puts the token in a meta tag and the app's own fetch calls send it.
+- Admin responses carry `Cache-Control: no-store`. All responses carry a Content-Security-Policy (`frame-ancestors 'none'`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. The CSP allows inline scripts because Next.js needs them.
+- The password and token never reach the client bundle. The server reads them at runtime.
+
+### Public endpoints
+
+- `/api/collect` returns 204 or a short error code. It never returns stored data. It reads only the fields the snippet sends, caps each one, refuses a body over 2 KB, allows 60 requests a minute per address, and answers only origins in `allowedOrigins`. CORS headers name the allowed origin, never `*`.
+- `/api/optout` allows 10 requests an hour per address and gives the same answer whether or not the address was stored. It sends no CORS headers.
+- The address comes from `x-forwarded-for`, so run the app behind a proxy that sets it and strips what clients send, or limits are easy to dodge.
+
+### Setup
+
+```bash
+export REVEAL_ADMIN_PASSWORD='a password of 12 or more characters'
+# or keep it out of the environment as plain text:
+npm run hash-password -- 'a password of 12 or more characters'   # prints REVEAL_ADMIN_PASSWORD_HASH=...
+```
+
+Rotate the password by changing the variable and restarting. Changing it signs every session out. Where data is stored: `data/reveal.json` (or `REVEAL_DATA`) holds visits, resolved companies, the call log and, with person-level on, people, the suppression list and the audit log. `reveal.config.json` holds settings. Both are plain files on the server's disk, so protect and back them up like any file with personal data.
+
+### The stronger option
+
+A shared password is the floor. For anything people other than you can reach, put the admin paths behind a VPN, a private network or an identity-aware proxy (Cloudflare Access, Tailscale, Google IAP, oauth2-proxy) and keep only the public routes in the table above open to the internet. Keep the app's password on as well.
+
+### Not covered
+
+No per-user accounts, no roles, no audit of who signed in, and no Supabase option. The app has one admin.
 
 ## Signals behind the ICP flag
 
@@ -199,7 +262,7 @@ The setup page (Person-level, in the sidebar) refuses to turn the feature on unt
 
 ### Turn it on
 
-Use the setup page, or set this in `reveal.config.json`. `enabled: true` without a date and every condition is rejected at load time.
+Person-level needs admin sign-in. Set `REVEAL_ADMIN_PASSWORD` first. Without it the app refuses to save `enabled: true` from the settings page and ignores it when it reads the file. Then use the setup page, or set this in `reveal.config.json`. `enabled: true` without a date and every condition is rejected at load time.
 
 ```json
 {
@@ -361,7 +424,8 @@ Dropped on purpose: email finding and a hosted multi-user mode. Person-level ide
 
 - No paid looot run was made. Parsing of the IPinfo and company answers is built from IPinfo's public field list and from fixtures, not from recorded paid responses. Which fields the `ipinfo--2` plan returns (company, ASN type, privacy flags) depends on the IPinfo tier behind looot. When only the ASN name is present, the app falls back to the `networkNameHints` list in the config to spot ISPs, and that list is a heuristic.
 - The `company.enrich` job answer is read by looking for common field names. Providers differ, so a missing field shows as "unknown".
-- The tracking snippet and collect route were not load tested and have no rate limit.
+- The tracking snippet and collect route were not load tested. The rate limit is in memory, per process.
+- The CLI (`npm run reveal`) has no sign-in. It runs as you, on your machine, and reads the same state file.
 
 If a parser fails on a real response, open an issue with the raw body (see Troubleshooting).
 

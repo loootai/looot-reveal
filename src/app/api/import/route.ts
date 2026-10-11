@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
+import { requireAdminRoute } from "@/lib/auth/guard";
 import { importText } from "@/lib/app";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  const denied = await requireAdminRoute(req);
+  if (denied) return denied;
   const body = (await req.json().catch(() => null)) as { text?: string; format?: string } | null;
   if (!body?.text) return NextResponse.json({ error: "text is required" }, { status: 400 });
   const format = ["auto", "combined", "csv", "jsonl"].includes(body.format ?? "auto") ? (body.format as "auto") : "auto";

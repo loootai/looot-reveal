@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { usd, usdPrecise } from "@/lib/money";
 import type { PersonQuote } from "@/lib/person/engine";
+import { adminFetch } from "./adminFetch";
 
 /** Quote first, then a run that cannot pass the cap. */
 export function PersonRunClient({ quote, demo, hasToken, needsLooot, capUsd }: { quote: PersonQuote; demo: boolean; hasToken: boolean; needsLooot: boolean; capUsd: number }) {
@@ -17,7 +18,7 @@ export function PersonRunClient({ quote, demo, hasToken, needsLooot, capUsd }: {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/person/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ capUsd }) });
+      const res = await adminFetch("/api/person/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ capUsd }) });
       const r = (await res.json()) as { error?: string; spentMicros: number; identified: number; skipped: number; noMatch: number; failed: number; notRun: number; pending: number };
       if (!res.ok) throw new Error(r.error ?? `HTTP ${res.status}`);
       setMsg(`Identified ${r.identified}, no match ${r.noMatch}, refused by a check ${r.skipped}, failed ${r.failed}. Spent ${usd(r.spentMicros)}.${r.notRun > 0 ? ` Stopped at the cap with ${r.notRun} not run.` : ""}${r.pending > 0 ? ` ${r.pending} still queued.` : ""}`);

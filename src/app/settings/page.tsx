@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { requireAdminPage } from "@/lib/auth/guard";
 import { SettingsClient } from "@/components/SettingsClient";
 import { getView } from "@/lib/app";
 
@@ -6,6 +7,7 @@ export const metadata: Metadata = { title: "Config file" };
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
+  await requireAdminPage();
   const v = await getView();
   return (
     <div className="flex flex-col gap-6">

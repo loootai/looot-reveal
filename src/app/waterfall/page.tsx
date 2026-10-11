@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { requireAdminPage } from "@/lib/auth/guard";
 import { WaterfallClient } from "@/components/WaterfallClient";
 import { getView } from "@/lib/app";
 
@@ -6,6 +7,7 @@ export const metadata: Metadata = { title: "Provider waterfall" };
 export const dynamic = "force-dynamic";
 
 export default async function WaterfallPage() {
+  await requireAdminPage();
   const v = await getView();
   return (
     <div className="flex flex-col gap-4">

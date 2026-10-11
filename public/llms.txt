@@ -8,7 +8,8 @@ Node 20.9+ (tests 22.12+), `npm ci`. Real lookups need LOOOT_TOKEN (`looot login
 ## Run it
 - Dry run, no token, no call: npm run reveal -- --input examples/access.log --dry-run
 - Real run: LOOOT_TOKEN=... npm run reveal -- --input access.log --cap 0.50
-- Demo UI with sample data: npm run demo (http://localhost:3520)
+- Demo UI with sample data and no sign-in: npm run demo (http://localhost:3520)
+- Real UI: set REVEAL_ADMIN_PASSWORD (12+ characters), then npm run build && npm start. Without it the admin pages stay closed. Add your site to allowedOrigins in reveal.config.json for the tracking snippet.
 
 ## Outputs
 reveal-out/visitors.json, visitors.csv, visitors.md. Answers are cached in data/reveal.json, so a repeat IP costs nothing.

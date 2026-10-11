@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { requireAdminPage } from "@/lib/auth/guard";
 import { SampleBanner } from "@/components/SampleBanner";
 import { SuppressionClient } from "@/components/SuppressionClient";
 import { getView } from "@/lib/app";
@@ -8,6 +9,7 @@ export const metadata: Metadata = { title: "Suppression and opt-out" };
 export const dynamic = "force-dynamic";
 
 export default async function SuppressionPage() {
+  await requireAdminPage();
   const v = await getView();
   const s = v.person.suppression;
   return (

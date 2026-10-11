@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { requireAdminPage } from "@/lib/auth/guard";
 import { Table, Td, Th } from "@/components/ui/misc";
 import { getView } from "@/lib/app";
 import { ago } from "@/lib/format";
@@ -19,6 +20,7 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
 }
 
 export default async function CostsPage() {
+  await requireAdminPage();
   const v = await getView();
   const { byProvider, recent } = v.costs;
   return (

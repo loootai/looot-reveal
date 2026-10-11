@@ -69,6 +69,12 @@ const ConfigObject = z.object({
   enrich: z.boolean().default(true),
   /** Hard cap for one run, in dollars. A run stops before a call that would pass it. */
   spendCapUsd: z.number().min(0).default(1),
+  /**
+   * Sites allowed to send visits to /api/collect, as origins like "https://www.example.com". The browser
+   * sends its Origin header and the server checks it against this list. Empty means collect refuses every
+   * request (the demo is the exception). Add your own site before you install the snippet.
+   */
+  allowedOrigins: z.array(z.string().regex(/^https?:\/\/[^\s/]+$/i, "use an origin like https://www.example.com, with no path")).default([]),
   /** Visits and cached lookups older than this are deleted. */
   retentionDays: z.number().int().min(1).max(3650).default(30),
   /** false keeps only a salted hash of each IP once it is resolved. */

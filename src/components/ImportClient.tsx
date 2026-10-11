@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/input";
 import { usd, usdPrecise } from "@/lib/money";
 import type { Quote } from "@/lib/quote";
+import { adminFetch } from "./adminFetch";
 
 const SAMPLE = `203.0.113.10 - - [10/Oct/2026:09:12:01 +0000] "GET /pricing HTTP/1.1" 200 5120 "https://www.google.com/" "Mozilla/5.0"
 203.0.113.40 - - [10/Oct/2026:09:14:22 +0000] "GET /docs/api HTTP/1.1" 200 8120 "-" "Mozilla/5.0"`;
 
 async function post<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const res = await adminFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const json = (await res.json()) as T & { error?: string };
   if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
   return json;

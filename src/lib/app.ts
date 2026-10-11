@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { buildDemoState, DEMO_CONFIG } from "@/demo/seed";
 import { demoEnv, demoSupplierFetch, DemoPersonRunner } from "@/demo/personDemo";
 import { ConfigSchema, type RevealConfig } from "./config";
+import { assertPersonLevelAuth, personLevelAllowed } from "./auth/policy";
 import { buildFeed, type Feed } from "./feed";
 import { addVisits, purgeOld, quotePending, resolvePending, type State } from "./state";
 import { hasLoootToken, loootFromEnv, type LoootRunner } from "./looot";
@@ -36,7 +37,10 @@ async function open(): Promise<{ state: State; config: RevealConfig; save: () =>
     return { ...d, save: () => {}, looot: new DemoPersonRunner() };
   }
   const state = loadState(statePath());
-  return { state, config: loadConfig(configPath()), save: () => saveState(statePath(), state), looot: hasLoootToken() ? loootFromEnv() : null };
+  let config = loadConfig(configPath());
+  // Person-level needs admin sign-in. Without it the feature stays off, whatever the file says. Opt-out and the company feed keep working.
+  if (config.personLevel.enabled && !personLevelAllowed(process.env)) config = { ...config, personLevel: { ...config.personLevel, enabled: false } };
+  return { state, config, save: () => saveState(statePath(), state), looot: hasLoootToken() ? loootFromEnv() : null };
 }
 
 export interface View {
@@ -200,6 +204,17 @@ export async function purge() {
 export async function updateConfig(raw: unknown): Promise<RevealConfig> {
   if (isDemo()) throw new Error("The demo does not save settings.");
   const config = ConfigSchema.parse(raw);
+  assertPersonLevelAuth(config, process.env);
   saveConfig(configPath(), config);
   return config;
+}
+
+/** Free. What the public collect endpoint needs: the allowed origins, and whether this is the open demo. Reads no visit data. */
+export async function getCollectPolicy(): Promise<{ demo: boolean; allowedOrigins: string[] }> {
+  if (isDemo()) return { demo: true, allowedOrigins: [] };
+  try {
+    return { demo: false, allowedOrigins: loadConfig(configPath()).allowedOrigins };
+  } catch {
+    return { demo: false, allowedOrigins: [] };
+  }
 }

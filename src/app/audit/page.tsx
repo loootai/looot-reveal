@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { requireAdminPage } from "@/lib/auth/guard";
 import { SampleBanner } from "@/components/SampleBanner";
 import { Badge, Table, Td, Th } from "@/components/ui/misc";
 import { getView } from "@/lib/app";
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 const TONE = { lookup: "brand", skipped: "amber", optout: "neutral", delete: "neutral", suppress_import: "neutral" } as const;
 
 export default async function AuditPage() {
+  await requireAdminPage();
   const v = await getView();
   const { audit } = v.person;
   return (

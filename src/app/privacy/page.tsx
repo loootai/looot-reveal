@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { requireAdminPage } from "@/lib/auth/guard";
 import Link from "next/link";
 import { RetentionClient } from "@/components/RetentionClient";
 import { getView } from "@/lib/app";
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Privacy" };
 
 export default async function PrivacyPage() {
+  await requireAdminPage();
   const v = await getView();
   return (
     <div className="flex flex-col gap-6">

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireAdminPage } from "@/lib/auth/guard";
 import { VisitorsClient } from "@/components/VisitorsClient";
 import { buttonClass } from "@/components/ui/button";
 import { getView } from "@/lib/app";
@@ -18,6 +19,7 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
 }
 
 export default async function VisitorsPage() {
+  await requireAdminPage();
   const v = await getView();
   const { feed } = v;
   const icp = feed.companies.filter((c) => c.icp.matched).length;

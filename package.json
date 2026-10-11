@@ -1,18 +1,19 @@
 {
   "name": "looot-reveal",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Open-source website visitor to company lookup. IP address in, company out, with an ICP flag. Next.js and looot.",
   "license": "MIT",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "demo": "NEXT_PUBLIC_DEMO=1 next dev -p 3520",
+    "demo": "node scripts/demoGuard.mjs && NEXT_PUBLIC_DEMO=1 next dev -p 3520",
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit --incremental false",
     "lint": "eslint .",
     "reveal": "node --conditions=react-server --import tsx src/headless/cli.ts",
+    "hash-password": "node scripts/hashPassword.mjs",
     "leak-scan": "bash scripts/leak-scan.sh ."
   },
   "dependencies": {

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireAdminPage } from "@/lib/auth/guard";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Check, TriangleAlert, X } from "lucide-react";
 import { Badge, Table, Td, Th } from "@/components/ui/misc";
@@ -10,6 +11,7 @@ import { SampleBanner } from "@/components/SampleBanner";
 export const dynamic = "force-dynamic";
 
 export default async function CompanyPage({ params }: { params: Promise<{ domain: string }> }) {
+  await requireAdminPage();
   const { domain } = await params;
   const v = await getView();
   const c = v.feed.companies.find((x) => x.domain === decodeURIComponent(domain));

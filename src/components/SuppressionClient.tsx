@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
 import { Table, Td, Th } from "@/components/ui/misc";
 import type { SuppressionEntry } from "@/lib/person/types";
+import { adminFetch } from "./adminFetch";
 
 async function call<T>(method: string, url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const res = await adminFetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const json = (await res.json()) as T & { error?: string };
   if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
   return json;

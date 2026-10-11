@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { requireAdminPage } from "@/lib/auth/guard";
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import { PersonRunClient } from "@/components/PersonRunClient";
@@ -25,6 +26,7 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
 const href = (u: string) => (/^https?:\/\//i.test(u) ? u : `https://${u}`);
 
 export default async function PeoplePage() {
+  await requireAdminPage();
   const v = await getView();
   const pv = v.person;
   const known = new Set(v.feed.companies.map((c) => c.domain));
