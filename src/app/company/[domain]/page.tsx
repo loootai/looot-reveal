@@ -5,6 +5,7 @@ import { Badge, Table, Td, Th } from "@/components/ui/misc";
 import { getView } from "@/lib/app";
 import { ago, reasonLabel } from "@/lib/format";
 import { usd, usdPrecise } from "@/lib/money";
+import { SampleBanner } from "@/components/SampleBanner";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ domain
   const c = v.feed.companies.find((x) => x.domain === decodeURIComponent(domain));
   if (!c) notFound();
   const p = c.profile;
+  const people = v.person.active ? (v.person.byCompany[c.domain] ?? []) : [];
   return (
     <div className="flex flex-col gap-4">
       <Link href="/" className="flex w-fit items-center gap-1 text-link hover:underline">
@@ -103,6 +105,42 @@ export default async function CompanyPage({ params }: { params: Promise<{ domain
           ))}
         </ul>
       </section>
+
+      {v.person.active && (
+        <section className="rounded-panel border border-line bg-panel" aria-labelledby="ppl">
+          <div className="border-b border-line p-3">
+            <h2 id="ppl" className="font-semibold">People identified (US only)</h2>
+            <p className="text-12 text-mute">Named by your supplier or your own forms, after the region, consent and suppression checks. See the <Link href="/people" className="text-link hover:underline">People</Link> page for cost and the audit log for why each was allowed.</p>
+          </div>
+          {v.demo && <div className="p-3"><SampleBanner /></div>}
+          {people.length === 0 ? (
+            <p className="p-4 text-mute">No one at this company has been identified.</p>
+          ) : (
+            <Table>
+              <thead>
+                <tr>
+                  <Th>Person</Th>
+                  <Th>Title</Th>
+                  <Th>Supplied by</Th>
+                  <Th className="text-right">Confidence</Th>
+                  <Th>Last seen</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {people.map((x) => (
+                  <tr key={x.id}>
+                    <Td className="font-medium">{x.name}{v.demo && <Badge tone="amber" className="ml-1.5">Sample</Badge>}</Td>
+                    <Td>{x.title ?? "Not returned"}</Td>
+                    <Td className="num">{x.supplier}</Td>
+                    <Td className="num text-right">{x.confidence === undefined ? "n/a" : `${Math.round(x.confidence * 100)}%`}</Td>
+                    <Td>{ago(x.lastSeen, v.now)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+        </section>
+      )}
 
       <section className="rounded-panel border border-line bg-panel" aria-labelledby="pages">
         <h2 id="pages" className="border-b border-line p-3 font-semibold">

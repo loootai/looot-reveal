@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
-import { AppShell, type ShellNavSection } from "@/components/AppShell";
+import type { ShellNavSection } from "@/components/AppShell";
+import { ShellGate } from "@/components/ShellGate";
 import { getView } from "@/lib/app";
 import { usd } from "@/lib/money";
 import "./globals.css";
@@ -23,7 +24,7 @@ export const viewport: Viewport = {
 
 const themeScript = `(function(){try{var q=new URLSearchParams(location.search).get("theme");var t=q||localStorage.getItem("theme")||"system";var d=t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d)}catch(e){}})()`;
 
-const NAV: ShellNavSection[] = [
+const BASE_NAV: ShellNavSection[] = [
   {
     heading: "Visitors",
     items: [
@@ -37,6 +38,7 @@ const NAV: ShellNavSection[] = [
     items: [
       { href: "/waterfall", label: "Provider waterfall", icon: "layers" },
       { href: "/icp", label: "ICP", icon: "target" },
+      { href: "/person-setup", label: "Person-level (optional)", icon: "users" },
       { href: "/privacy", label: "Privacy and retention", icon: "scroll" },
       { href: "/costs", label: "Costs", icon: "receipt" },
       { href: "/settings", label: "Config file", icon: "settings" },
@@ -44,25 +46,36 @@ const NAV: ShellNavSection[] = [
   },
 ];
 
+/** The People section shows only when person-level identification is on. The company feed stays the first item either way. */
+const PEOPLE_NAV: ShellNavSection = {
+  heading: "People (US only)",
+  items: [
+    { href: "/people", label: "People", icon: "users" },
+    { href: "/suppression", label: "Suppression and opt-out", icon: "bell" },
+    { href: "/audit", label: "Audit log", icon: "list" },
+  ],
+};
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const v = await getView();
   const cap = Math.round(v.config.spendCapUsd * 1_000_000);
+  const nav = v.person.active ? [BASE_NAV[0], PEOPLE_NAV, ...BASE_NAV.slice(1)] : BASE_NAV;
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-dvh bg-page text-ink">
-        <AppShell
+        <ShellGate
           appName="looot-reveal"
-          nav={NAV}
+          nav={nav}
           githubHref="https://github.com/loootai/looot-reveal"
           demoLabel={v.demo ? "Demo data" : undefined}
           spend={{ label: `Spent in total, ${usd(cap)} cap per run`, spent: usd(v.spentMicros) }}
           primaryAction={{ href: "/import", label: "Import visits" }}
         >
           <div className="mx-auto max-w-6xl px-4 py-6 md:px-6">{children}</div>
-        </AppShell>
+        </ShellGate>
       </body>
     </html>
   );
