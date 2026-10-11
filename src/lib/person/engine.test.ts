@@ -321,7 +321,7 @@ describe("suppression and opt-out", () => {
   });
   it("imports emails, sha256, md5 and domains and counts them", () => {
     const state = emptyState();
-    const r = importSuppression(state, `a@example.com, ${sha256Email("b@example.com")}\n${md5Email("c@example.com")}\n@example.org\nnot a thing`, NOW);
+    const r = importSuppression(state, `a@example.com, ${sha256Email("b@example.com")}\n${md5Email("c@example.com")}\ncorp.example\nnot a thing`, NOW);
     expect(r).toMatchObject({ added: 5, skipped: 1 });
     const text = JSON.stringify(state.person!.suppression);
     expect(text).not.toContain("a@example.com");
