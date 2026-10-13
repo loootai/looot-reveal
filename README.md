@@ -1,4 +1,6 @@
-<p align="center"><img src="assets/hero.png" alt="looot-reveal" width="100%"></p>
+![looot-reveal: the visitors feed and a company page from a live run on 2026-10-13, with seven companies found from 13 IP addresses and an ICP flag on each](docs/media/banner.png)
+
+Logos and names belong to their owners. Company lookups are from a live run on 2026-10-13, the visits are simulated (Demo data). No affiliation.
 
 # looot-reveal
 
@@ -9,6 +11,50 @@ An open-source alternative to [RB2B](https://www.rb2b.com/pricing) and Clearbit 
 It reads an access log, a CSV of IPs, or visits from a small tracking snippet. It looks each IP up through looot's IP intelligence provider, drops ISPs, hosting and VPNs, enriches the company that is left, and shows a feed of visiting companies with the pages they viewed and an ICP match flag.
 
 > **Security notice.** Versions 0.2.0 and older had no admin sign-in. Anyone who could reach a deployed instance could read visitors, change settings, start paid looot runs and edit the suppression list. If you run v0.2.0 or older on a reachable host, upgrade to v0.2.1 and set `REVEAL_ADMIN_PASSWORD`. See [Securing a deployment](#securing-a-deployment).
+
+<table>
+<tr>
+<td width="50%"><img src="docs/media/card-feed.png" alt="The feed: seven visiting companies from 13 addresses, four match the ICP"></td>
+<td width="50%"><img src="docs/media/card-company.png" alt="A company page: every ICP signal with the value seen, the supplier and the call cost"></td>
+</tr>
+<tr>
+<td><img src="docs/media/card-waterfall.png" alt="The provider waterfall: a free ASN lookup first, then the IPinfo lookup at $0.0005"></td>
+<td><img src="docs/media/card-costs.png" alt="The costs page: daily and monthly budget, used, reserved and remaining"></td>
+</tr>
+</table>
+
+![A 20-second walkthrough: feed, company page, provider waterfall, costs](docs/media/demo.gif)
+
+The same walkthrough as MP4: [docs/media/demo.mp4](docs/media/demo.mp4).
+
+## Live run, 2026-10-13
+
+I looked up 13 real public IP addresses with one looot token and the default waterfall. The visits are made up (Demo data): 29 page views written into a log file, so no real visitor is involved. The lookups are live.
+
+- 8 addresses belong to companies that run their own network: Cisco, Oracle, Salesforce, SAP, Dell, Adobe, Workday and F5. I took them from public DNS (the apex and mail hosts of each domain).
+- 5 addresses are the web servers of Clay, Apollo.io, ZoomInfo, Apify and HubSpot, from `dig`.
+
+| | |
+|---|---|
+| Calls | 27 (20 IP lookups, 7 company enrichments) |
+| Charged | $0.0217 (the quote said at most $0.0295) |
+| Companies found | 7, of which 4 match the default ICP |
+| Dropped | 6 addresses: 3 Cloudflare, 3 Amazon |
+
+What was good and what was not:
+
+- The five competitor web servers sit behind Cloudflare or Amazon, so looot answered with the network owner and the app dropped them. That is the right result: those IPs say nothing about who visits. Most startups look like this from the outside, so a reveal tool finds mostly companies with their own address space, plus office traffic.
+- Every match is "medium" confidence. Only the free ASN lookup named the company, and the paid IPinfo lookup agreed or added nothing.
+- Two company names from the enrichment are wrong: sap.com came back as "Sapsf" and oracle.com as "Opower". The domain was right. The feed shows the name the supplier gave.
+- Headcount came back empty for all seven, so the "20 to 2,000 employees" signal never matched. Large enterprises would not match it anyway.
+- Adobe's address resolved to Amazon and was dropped.
+
+Run the same thing yourself with a log of your own:
+
+```bash
+npm run reveal -- --input access.log --dry-run
+LOOOT_TOKEN=... npm run reveal -- --input access.log --cap 0.25
+```
 
 ![Visitors feed, light](docs/screenshots/feed-light.png)
 ![Visitors feed, dark](docs/screenshots/feed-dark.png)

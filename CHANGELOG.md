@@ -2,6 +2,10 @@
 
 Built from the GitHub release notes. Each version links to its release page.
 
+## Unreleased
+
+- Sign-in from Chrome no longer fails with "Cross-site request refused". The app sends `Referrer-Policy: no-referrer`, so Chrome posts forms with `Origin: null`. The same-origin check now falls back to `Sec-Fetch-Site: same-origin` for that case and still refuses `Origin: null` from another site. Test in `src/lib/auth/sameOrigin.test.ts`.
+
 ## 0.2.2 (2026-10-11)
 
 Spend limits. Before this, a run was limited only by a cap that lived inside one run. The resolve and person-run routes read `capUsd` from the request body, so a caller could raise it. Nothing limited spend across runs, two runs started together each began at zero, and a refresh of an expired address used a key with the date in it, so it paid again each day.
